@@ -1,460 +1,81 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>GPS Tracker & Ghost Runner</title>
-<!-- iOS PWA -->
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="GPS Ghost">
-<!-- Leaflet CSS & JS (Vanilla Clean Import) -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- toGeoJSON -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js"></script>
-<style>
-* {
-box-sizing: border-box;
--webkit-tap-highlight-color: transparent;
-}
-html, body {
-height: 100%;
-width: 100vw;
-margin: 0;
-padding: 0;
-overflow: hidden;
-background-color: #111827;
-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-}
-/* 地図領域 */
-#map {
-position: absolute;
-top: 0;
-bottom: 0;
-left: 0;
-right: 0;
-width: 100%;
-height: 100%;
-z-index: 1;
-background-color: #1f2937;
-}
-/* マーカーアニメーション */
-@keyframes pulse-red-large {
-0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
-70% { transform: scale(1.15); box-shadow: 0 0 0 18px rgba(239, 68, 68, 0); }
-100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-}
-@keyframes pulse-ghost-cyan {
-0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.8); }
-70% { transform: scale(1.2); box-shadow: 0 0 0 20px rgba(6, 182, 212, 0); }
-100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
-}
-.marker-current-large {
-width: 28px !important;
-height: 28px !important;
-background-color: #ef4444;
-border: 3px solid #ffffff;
-border-radius: 50%;
-box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-animation: pulse-red-large 1.8s infinite;
-}
-.marker-ghost-large {
-width: 36px !important;
-height: 36px !important;
-background-color: rgba(6, 182, 212, 0.95);
-border: 3px solid #ffffff;
-border-radius: 50%;
-display: flex;
-align-items: center;
-justify-content: center;
-font-size: 18px;
-box-shadow: 0 4px 12px rgba(6, 182, 212, 0.6);
-animation: pulse-ghost-cyan 1.6s infinite;
-}
-/* 軽量UIスタイル (Tailwind非依存の堅牢CSS) */
-.app-card {
-background: rgba(255, 255, 255, 0.96);
-backdrop-filter: blur(12px);
--webkit-backdrop-filter: blur(12px);
-border-radius: 20px;
-box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3), 0 8px 10px -6px rgba(0,0,0,0.3);
-border: 1px solid rgba(255, 255, 255, 0.3);
-}
-.dark-card {
-background: rgba(17, 24, 39, 0.92);
-backdrop-filter: blur(12px);
--webkit-backdrop-filter: blur(12px);
-border-radius: 20px;
-border: 1px solid rgba(255, 255, 255, 0.12);
-color: #ffffff;
-}
-.btn-main {
-background-color: #ef4444;
-color: white;
-font-weight: bold;
-border: none;
-border-radius: 14px;
-padding: 12px 16px;
-font-size: 15px;
-display: flex;
-align-items: center;
-justify-content: center;
-gap: 8px;
-cursor: pointer;
-box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-transition: transform 0.1s ease, background-color 0.2s;
-}
-.btn-main:active { transform: scale(0.96); }
-.btn-icon {
-background-color: #f3f4f6;
-border: none;
-border-radius: 14px;
-width: 46px;
-height: 46px;
-display: flex;
-align-items: center;
-justify-content: center;
-font-size: 18px;
-cursor: pointer;
-box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-transition: transform 0.1s, background-color 0.2s;
-}
-.btn-icon:active { transform: scale(0.95); background-color: #e5e7eb; }
-.hidden { display: none !important; }
-</style>
-</head>
-<body class="select-none">
-<!-- メインマップ -->
-<div id="map"></div>
-<!-- 上部VSモードステータス -->
-<div id="ghost-status-card" class="hidden dark-card" style="position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 90%; max-width: 420px; padding: 14px;">
-<div style="display: flex; align-items: center; justify-content: space-between;">
-<div style="display: flex; align-items: center; gap: 8px;">
-<span style="width: 10px; height: 10px; background-color: #22d3ee; border-radius: 50%; display: inline-block;"></span>
-<span style="font-size: 11px; font-weight: 800; color: #22d3ee; letter-spacing: 0.05em;">VS GHOST</span>
-</div>
-<div id="ghost-diff-time" style="font-size: 22px; font-weight: 900; font-family: monospace; color: #facc15;">
---:--
-</div>
-</div>
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; pt: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px;">
-<div>
-<span style="color: #9ca3af;">距離差:</span>
-<span id="ghost-diff-dist" style="font-weight: bold; margin-left: 4px; color: #ffffff;">-- m</span>
-</div>
-<div style="text-align: right;">
-<span style="color: #9ca3af;">ゴースト速度:</span>
-<span id="ghost-speed" style="font-weight: bold; margin-left: 4px; color: #ffffff;">-- km/h</span>
-</div>
-</div>
-</div>
-<!-- 音楽プレイヤー風 制御パネル -->
-<div id="ghost-player-card" class="hidden dark-card" style="position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 90%; max-width: 420px; padding: 16px;">
-<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-<div style="display: flex; align-items: center; gap: 6px;">
-<button id="btn-player-reset" style="background: #374151; color: #d1d5db; border: none; padding: 6px 10px; border-radius: 8px; font-size: 11px; font-weight: bold;">
-⏮️ 最初へ
-</button>
-<button id="btn-replay-play" style="background: #06b6d4; color: white; border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 14px; font-weight: bold; display: flex; align-items: center; justify-content: center;">
-▶
-</button>
-<button id="btn-skip-back" style="background: #374151; color: #d1d5db; border: none; padding: 6px 8px; border-radius: 6px; font-size: 11px;">
--5s
-</button>
-<button id="btn-skip-forward" style="background: #374151; color: #d1d5db; border: none; padding: 6px 8px; border-radius: 6px; font-size: 11px;">
-+5s
-</button>
-</div>
-<div style="font-size: 12px; font-family: monospace;">
-<span id="player-current-time" style="color: #22d3ee; font-weight: bold;">00:00</span> / <span id="player-total-time" style="color: #9ca3af;">00:00</span>
-</div>
-</div>
-<div>
-<input id="ghost-seekbar" type="range" min="0" max="100" value="0" style="width: 100%; height: 6px; accent-color: #06b6d4; cursor: pointer;">
-<div style="display: flex; justify-content: space-between; font-size: 10px; color: #9ca3af; font-weight: bold; margin-top: 4px;">
-<span>📍 スタート</span>
-<span>ゴースト出発位置調整</span>
-<span>🏁 ゴール</span>
-</div>
-</div>
-</div>
-<!-- メイン操作ドロワー -->
-<div class="app-card" style="position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 1000; width: 90%; max-width: 420px; padding: 16px;">
-<!-- タイトル & バージョン -->
-<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 0 4px;">
-<div style="display: flex; align-items: center; gap: 6px;">
-<span style="font-size: 18px;">👻</span>
-<span style="font-weight: 900; color: #1f2937; font-size: 13px; letter-spacing: 0.05em; text-transform: uppercase;">GPS Ghost Runner</span>
-</div>
-<span style="background: #f3f4f6; color: #4b5563; font-size: 10px; font-family: monospace; padding: 3px 8px; border-radius: 12px; font-weight: bold; border: 1px solid #e5e7eb;">
-v2026.10.08-06:50
-</span>
-</div>
-<div style="display: flex; align-items: center; gap: 8px;">
-<button id="btn-toggle-tracking" class="btn-main" style="flex: 1;">
-<span id="recording-dot" style="width: 10px; height: 10px; border-radius: 50%; background-color: #ffffff;"></span>
-<span id="btn-tracking-label">記録開始</span>
-</button>
-<button id="btn-recenter" class="btn-icon">🎯</button>
-<button id="btn-toggle-settings" class="btn-icon">⚙️</button>
-</div>
-<!-- 設定パネル -->
-<div id="settings-panel" class="hidden" style="margin-top: 12px; pt: 12px; border-top: 1px solid #e5e7eb;">
-<div style="background: #ecfeff; padding: 12px; border-radius: 14px; border: 1px solid #cffaff; margin-bottom: 12px;">
-<label style="display: block; font-size: 11px; font-weight: bold; color: #164e63; margin-bottom: 6px;">👻 ゴーストGPXファイル選択</label>
-<input type="file" id="input-ghost-file" accept=".gpx,text/xml" style="display: none;">
-<button id="btn-select-ghost" style="width: 100%; background: #0891b2; color: white; font-size: 12px; font-weight: bold; padding: 10px; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 2px 6px rgba(8, 145, 178, 0.3); margin-bottom: 8px;">
-📁 GPXファイルを開く
-</button>
-<div id="ghost-file-info" class="hidden" style="font-size: 11px; color: #4b5563; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-ファイル: <span id="ghost-filename" style="font-weight: bold; color: #111827;"></span>
-</div>
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #e5e7eb; padding: 3px; border-radius: 8px; font-size: 11px; font-weight: bold;">
-<button id="mode-vs" style="padding: 6px; border-radius: 6px; border: none; background: #ffffff; color: #0e7490; cursor: pointer; text-align: center;">
-⚔️ VS並走
-</button>
-<button id="mode-replay" style="padding: 6px; border-radius: 6px; border: none; background: transparent; color: #4b5563; cursor: pointer; text-align: center;">
-▶️ リプレイ
-</button>
-</div>
-</div>
-<div>
-<label style="display: block; font-size: 11px; font-weight: bold; color: #4b5563; margin-bottom: 4px;">🗺️ 地図の種類</label>
-<select id="map-tile-select" style="width: 100%; background: #f9fafb; border: 1px solid #d1d5db; color: #111827; font-size: 12px; border-radius: 8px; padding: 8px;">
-<option value="osm">OpenStreetMap (標準)</option>
-<option value="gsi_std">国土地理院 (標準)</option>
-<option value="gsi_pale">国土地理院 (淡色)</option>
-</select>
-</div>
-</div>
-</div>
-<script>
-let map, currentMarker, ghostMarker;
-let trackPolyline, ghostPolyline;
-let watchId = null, isTracking = false, autoRecenter = true;
-let currentTrack = [], ghostData = null, ghostTotalDuration = 0;
-let ghostMode = 'vs', replayTimer = null, ghostOffsetTime = 0, replaySpeed = 1, trackingStartTime = null;
-// 地図タイルの設定
-const tileLayers = {
-osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-attribution: '© OpenStreetMap', maxZoom: 19
-}),
-gsi_std: L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
-attribution: '© 国土地理院', maxZoom: 18
-}),
-gsi_pale: L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
-attribution: '© 国土地理院', maxZoom: 18
-})
-};
-window.addEventListener('load', function() {
-try {
-// マップ初期化
-map = L.map('map', { zoomControl: false, fadeAnimation: false }).setView([35.681236, 139.767125], 15);
-tileLayers.osm.addTo(map);
-currentMarker = L.marker([35.681236, 139.767125], {
-icon: L.divIcon({ className: 'marker-current-large', iconSize: [28, 28], iconAnchor: [14, 14] })
-}).addTo(map);
-ghostMarker = L.marker([35.681236, 139.767125], {
-icon: L.divIcon({ className: 'marker-ghost-large', html: '👻', iconSize: [36, 36], iconAnchor: [18, 18] })
-});
-trackPolyline = L.polyline([], { color: '#ef4444', weight: 5, opacity: 0.9 }).addTo(map);
-ghostPolyline = L.polyline([], { color: '#06b6d4', weight: 4, opacity: 0.6, dashArray: '6, 8' }).addTo(map);
-setupEvents();
-setTimeout(() => { map.invalidateSize(); }, 300);
-if (navigator.geolocation) {
-navigator.geolocation.getCurrentPosition(
-(pos) => {
-const lat = pos.coords.latitude, lng = pos.coords.longitude;
-map.setView([lat, lng], 16);
-currentMarker.setLatLng([lat, lng]);
-},
-() => {},
-{ enableHighAccuracy: false, timeout: 5000 }
-);
-}
-} catch (err) {
-alert("マップの初期化エラーが発生しました: " + err.message);
-}
-});
-function parseGhostGPX(xmlText) {
-try {
-const parser = new DOMParser();
-const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-let pts = xmlDoc.querySelectorAll("trkpt");
-if (pts.length === 0) pts = xmlDoc.querySelectorAll("rtept");
-if (!pts || pts.length === 0) {
-alert("GPX内に位置データが見つかりませんでした。");
-return null;
-}
-let parsed = [], startTime = null;
-pts.forEach((pt) => {
-const lat = parseFloat(pt.getAttribute("lat"));
-const lng = parseFloat(pt.getAttribute("lon"));
-const timeNode = pt.querySelector("time");
-if (!isNaN(lat) && !isNaN(lng)) {
-let timeOffset = 0;
-if (timeNode) {
-const timeVal = new Date(timeNode.textContent).getTime();
-if (!isNaN(timeVal)) {
-if (startTime === null) startTime = timeVal;
-timeOffset = (timeVal - startTime) / 1000;
-}
-}
-parsed.push({ lat, lng, timeOffset });
-}
-});
-if (parsed.length < 2) return null;
-if (startTime === null || parsed[parsed.length - 1].timeOffset === 0) {
-parsed.forEach((p, idx) => { p.timeOffset = idx * 2; });
-}
-ghostTotalDuration = parsed[parsed.length - 1].timeOffset;
-return parsed;
-} catch(e) {
-alert("GPX解析失敗");
-return null;
-}
-}
-function getGhostStateAtTime(sec) {
-if (!ghostData || ghostData.length === 0) return null;
-if (sec <= 0) return { lat: ghostData[0].lat, lng: ghostData[0].lng, speed: 0 };
-const last = ghostData[ghostData.length - 1];
-if (sec >= last.timeOffset) return { lat: last.lat, lng: last.lng, speed: 0 };
-for (let i = 0; i < ghostData.length - 1; i++) {
-const p1 = ghostData[i], p2 = ghostData[i + 1];
-if (sec >= p1.timeOffset && sec <= p2.timeOffset) {
-const r = (sec - p1.timeOffset) / (p2.timeOffset - p1.timeOffset || 1);
-const lat = p1.lat + (p2.lat - p1.lat) * r;
-const lng = p1.lng + (p2.lng - p1.lng) * r;
-const dist = calcDist(p1.lat, p1.lng, p2.lat, p2.lng);
-const speed = (dist / ((p2.timeOffset - p1.timeOffset) || 1)) * 3.6;
-return { lat, lng, speed };
-}
-}
-return null;
-}
-function updateGhostPosition(sec) {
-ghostOffsetTime = Math.max(0, Math.min(sec, ghostTotalDuration));
-const gState = getGhostStateAtTime(ghostOffsetTime);
-if (gState) {
-ghostMarker.setLatLng([gState.lat, gState.lng]);
-if (!map.hasLayer(ghostMarker)) ghostMarker.addTo(map);
-}
-document.getElementById('player-current-time').textContent = formatTime(ghostOffsetTime);
-document.getElementById('ghost-seekbar').value = (ghostOffsetTime / ghostTotalDuration) * 100 || 0;
-}
-function toggleTracking() {
-if (isTracking) {
-navigator.geolocation.clearWatch(watchId);
-isTracking = false;
-document.getElementById('btn-tracking-label').textContent = '記録開始';
-document.getElementById('recording-dot').style.backgroundColor = '#ffffff';
-document.getElementById('ghost-status-card').classList.add('hidden');
-} else {
-if (!navigator.geolocation) return alert('GPS非対応');
-currentTrack = [];
-trackPolyline.setLatLngs([]);
-trackingStartTime = Date.now();
-watchId = navigator.geolocation.watchPosition(
-(pos) => {
-const lat = pos.coords.latitude, lng = pos.coords.longitude;
-currentMarker.setLatLng([lat, lng]);
-if (!map.hasLayer(currentMarker)) currentMarker.addTo(map);
-trackPolyline.addLatLng([lat, lng]);
-if (autoRecenter) map.panTo([lat, lng]);
-if (ghostData && ghostMode === 'vs') {
-const elapsed = ((Date.now() - trackingStartTime) / 1000) + ghostOffsetTime;
-const gState = getGhostStateAtTime(elapsed);
-if (gState) {
-ghostMarker.setLatLng([gState.lat, gState.lng]);
-if (!map.hasLayer(ghostMarker)) ghostMarker.addTo(map);
-const dist = calcDist(lat, lng, gState.lat, gState.lng);
-document.getElementById('ghost-diff-time').textContent = formatTime(elapsed);
-document.getElementById('ghost-diff-dist').textContent = ⁠${Math.round(dist)} m⁠;
-document.getElementById('ghost-speed').textContent = ⁠${gState.speed.toFixed(1)} km/h⁠;
-}
-}
-},
-(err) => console.warn("GPS:", err),
-{ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-);
-isTracking = true;
-document.getElementById('btn-tracking-label').textContent = '記録中...';
-document.getElementById('recording-dot').style.backgroundColor = '#fca5a5';
-if (ghostData && ghostMode === 'vs') document.getElementById('ghost-status-card').classList.remove('hidden');
-}
-}
-function startReplay() {
-stopReplay();
-if (!ghostData) return;
-replayTimer = setInterval(() => {
-ghostOffsetTime += 0.2 * replaySpeed;
-if (ghostOffsetTime > ghostTotalDuration) { ghostOffsetTime = ghostTotalDuration; stopReplay(); }
-updateGhostPosition(ghostOffsetTime);
-}, 200);
-}
-function stopReplay() {
-if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
-document.getElementById('btn-replay-play').textContent = '▶';
-}
-function calcDist(lat1, lon1, lat2, lon2) {
-const R = 6371e3;
-const dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
-const a = Math.sin(dLat/2)2 + Math.cos(lat1Math.PI/180) * Math.cos(lat2Math.PI/180) * Math.sin(dLon/2)2;
-return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-function formatTime(s) {
-const m = Math.floor(s / 60), sec = Math.floor(s % 60);
-return ⁠${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}⁠;
-}
-function setupEvents() {
-document.getElementById('btn-toggle-tracking').addEventListener('click', toggleTracking);
-document.getElementById('btn-recenter').addEventListener('click', () => {
-autoRecenter = true;
-if (currentMarker.getLatLng().lat !== 0) map.panTo(currentMarker.getLatLng());
-});
-document.getElementById('btn-toggle-settings').addEventListener('click', () => {
-document.getElementById('settings-panel').classList.toggle('hidden');
-});
-document.getElementById('map-tile-select').addEventListener('change', (e) => {
-Object.values(tileLayers).forEach(l => map.removeLayer(l));
-tileLayers[e.target.value].addTo(map);
-});
-document.getElementById('btn-select-ghost').addEventListener('click', () => {
-document.getElementById('input-ghost-file').click();
-});
-document.getElementById('input-ghost-file').addEventListener('change', (e) => {
-const file = e.target.files[0];
-if (!file) return;
-const reader = new FileReader();
-reader.onload = (evt) => {
-const parsed = parseGhostGPX(evt.target.result);
-if (parsed) {
-ghostData = parsed;
-const coords = ghostData.map(p => [p.lat, p.lng]);
-ghostPolyline.setLatLngs(coords);
-map.fitBounds(ghostPolyline.getBounds(), { padding: [40, 40] });
-document.getElementById('ghost-filename').textContent = file.name;
-document.getElementById('ghost-file-info').classList.remove('hidden');
-document.getElementById('ghost-player-card').classList.remove('hidden');
-document.getElementById('player-total-time').textContent = formatTime(ghostTotalDuration);
-updateGhostPosition(0);
-}
-};
-reader.readAsText(file);
-});
-document.getElementById('ghost-seekbar').addEventListener('input', (e) => {
-if (!ghostTotalDuration) return;
-const targetSec = (parseFloat(e.target.value) / 100) * ghostTotalDuration;
-updateGhostPosition(targetSec);
-});
-document.getElementById('btn-player-reset').addEventListener('click', () => updateGhostPosition(0));
-document.getElementById('btn-skip-back').addEventListener('click', () => updateGhostPosition(ghostOffsetTime - 5));
-document.getElementById('btn-skip-forward').addEventListener('click', () => updateGhostPosition(ghostOffsetTime + 5));
-document.getElementById('btn-replay-play').addEventListener('click', () => {
-if (replayTimer) { stopReplay(); } else { document.getElementById('btn-replay-play').textContent = '⏸'; startReplay(); }
-});
-}
-</script>
-</body>
-</html>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>GPS Tracker & Ghost Runner</title>
+
+  <!-- iOS PWA 設定 -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GPS Ghost">
+
+  <!-- Leaflet.js CSS & JS (安定版 CDN) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      height: 100%;
+      height: 100dvh;
+      width: 100vw;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #e5e7eb;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      background-color: #e5e7eb;
+    }
+
+    /* マーカー表示 */
+    .marker-current {
+      width: 28px;
+      height: 28px;
+      background-color: #ef4444;
+      border: 3px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    .marker-ghost {
+      width: 36px;
+      height: 36px;
+      background-color: rgba(6, 182, 212, 0.95);
+      border: 3px solid #ffffff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 4px 12px rgba(6, 182, 212, 0.5);
+    }
+
+    /* UIパネル */
+    .card-panel {
+      position: fixed;
+      z-index: 100;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 92%;
+      max-width: 440px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.6
