@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>GPS Tracker & GPX Ghost Runner</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- toGeoJSON (KML/GPX Parsing) -->
+  <script src="https://unpkg.com/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
+
+  <style>
+    /* アプリ独自のCSSアニメーションとスタイリング */
+    html, body, #map {
+      height: 100%;
+      width: 100vw;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    
+    /* マイク・現在地マーカーのパルスアニメーション */
+    @keyframes pulse-red {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    
+    @keyframes pulse-cyan {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.8); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 14px rgba(6, 182, 212, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+    }
+
+    .marker-current {
+      width: 16px;
+      height: 16px;
+      background-color: #ef4444;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      animation: pulse-red 2s infinite;
+    }
+
+    .marker-ghost {
+      width: 18px;
+      height: 18px;
+      background-color: #06b6d4;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      opacity: 0.85;
+      animation: pulse-cyan 1.5s infinite;
+    }
+
+    /* 地図UIのカスタマイズ */
+    .leaflet-touch .leaflet-control-layers, .leaflet-touch .leaflet-bar {
+      border: none;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      border-radius: 0.75rem;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 flex flex-col h-screen antialiased select-none">
+
+  <!-- メインマップエリア -->
+  <div id="map" class="z-0 h-full w-full"></div>
+
+  <!-- トップオーバーレイ: ゴーストタイム差（VSモード時） -->
+  <div id="ghost-status-card" class="hidden absolute top-4 left-1/2 transform -translate-x-1/2 z-20 w-11/12 max-w-md bg-gray-900/90 backdrop-blur-md text-white p-3 rounded-2xl shadow-2xl border border-gray-700 transition-all duration-300">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <span class="inline-block w-3 h-3 bg-cyan-400 rounded-full animate-ping"></span>
+        <span class="text-xs font-bold uppercase tracking-wider text-cyan-400">VS GHOST</span>
+      </div>
+      <div id="ghost-diff-time" class="text-lg font-black font-mono tracking-tight text-yellow-400">
+        --:--
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-700/60 text-xs">
+      <div>
+        <span class="text-gray-400">距離差:</span>
+        <span id="ghost-diff-dist" class="font-bold ml-1 text-white">-- m</span>
+      </div>
+      <div class="text-right">
+        <span class="text-gray-400">ゴースト速度:</span>
+        <span id="ghost-speed" class="font-bold ml-1 text-white">-- km/h</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ボトムオーバーレイ: リプレイ再生コントローラー（リプレイモード時） -->
+  <div id="replay-control-card" class="hidden absolute bottom-24 left-1/2 transform -translate-x-1/2 z-20 w-11/12 max-w-md bg-gray-900/90 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl border border-gray-700">
+    <div class="flex items-center justify-between mb-2">
+      <div class="flex items-center space-x-2">
+        <button id="btn-replay-play" class="bg-cyan-500 hover:bg-cyan-600 text-white p-2 rounded-full w-10 h-10 flex items-center justify-center font-bold text-sm shadow-md transition">
+          ▶
+        </button>
+        <div class="text-xs font-mono">
+          <span id="replay-current-time" class="text-cyan-400 font-bold">00:00</span> / <span id="replay-total-time" class="text-gray-400">00:00</span>
+        </div>
+      </div>
+      <div class="flex space-x-1 bg-gray-800 p-1 rounded-lg">
+        <button class="btn-speed px-2 py-1 text-xs rounded bg-cyan-600 font-bold" data-speed="1">1x</button>
+        <button class="btn-speed px-2 py-1 text-xs rounded hover:bg-gray-700" data-speed="2">2x</button>
+        <button class="btn-speed px-2 py-1 text-xs rounded hover:bg-gray-700" data-speed="5">5x</button>
+        <button class="btn-speed px-2 py-1 text-xs rounded hover:bg-gray-700" data-speed="10">10x</button>
+      </div>
+    </div>
+    <input id="replay-seekbar" type="range" min="0" max="100" value="0" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+  </div>
+
+  <!-- メイン操作パネル（ボトムドロワー） -->
+  <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-20 w-11/12 max-w-md bg-white/95 backdrop-blur-md rounded-2xl shadow-xl p-4 border border-gray-100 transition-all">
+    <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center space-x-2">
+        <button id="btn-toggle-tracking" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 px-4 rounded-xl shadow-md transition flex items-center justify-center space-x-2 active:scale-95">
+          <span id="recording-dot" class="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span>
+          <span id="btn-tracking-label">記録開始</span>
+        </button>
+      </div>
+      <button id="btn-recenter" class="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2.5 rounded-xl shadow-sm transition ml-2">
+        🎯
+      </button>
+      <button id="btn-toggle-settings" class="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2.5 rounded-xl shadow-sm transition ml-2">
+        ⚙️
+      </button>
+    </div>
+
+    <!-- 拡張設定パネル（アコーディオン） -->
+    <div id="settings-panel" class="hidden pt-3 border-t border-gray-200 space-y-4 max-h-80 overflow-y-auto">
+      
+      <!-- ゴースト機能設定 -->
+      <div class="bg-cyan-50/60 p-3 rounded-xl border border-cyan-100">
+        <label class="block text-xs font-bold text-cyan-900 mb-1">👻 ゴースト機能 (GPX)</label>
+        
+        <input type="file" id="input-ghost-file" accept=".gpx" class="hidden">
+        <button id="btn-select-ghost" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow-sm transition flex items-center justify-center space-x-1 mb-2">
+          📁 ゴーストGPXファイルを選択
+        </button>
+
+        <div id="ghost-file-info" class="text-xs text-gray-600 mb-2 truncate hidden">
+          選択中: <span id="ghost-filename" class="font-bold text-gray-800"></span>
+        </div>
+
+        <!-- 動作モード切り替え -->
+        <div class="grid grid-cols-2 gap-1 bg-gray-200/80 p-1 rounded-lg text-xs font-bold text-gray-600">
+          <button id="mode-vs" class="py-1.5 rounded-md bg-white text-cyan-700 shadow-sm transition text-center">
+            ⚔️ VS並走
+          </button>
+          <button id="mode-replay" class="py-1.5 rounded-md hover:text-gray-800 transition text-center">
+            ▶️ リプレイ
+          </button>
+        </div>
+      </div>
+
+      <!-- バックグラウンド地図レイヤー選択 -->
+      <div>
+        <label class="block text-xs font-bold text-gray-600 mb-1">🗺️ 背景地図</label>
+        <select id="map-tile-select" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-xs rounded-lg p-2 focus:ring-cyan-500 focus:border-cyan-500">
+          <option value="gsi_light">国土地理院 (淡色)</option>
+          <option value="gsi_std">国土地理院 (標準)</option>
+          <option value="gsi_ortho">国土地理院 (航空写真)</option>
+          <option value="osm">OpenStreetMap</option>
+          <option value="esri_sat">Esri Satellite</option>
+        </select>
+      </div>
+
+      <!-- オーバーレイGPX/KML読み込み -->
+      <div>
+        <label class="block text-xs font-bold text-gray-600 mb-1">📌 ガイドレイヤー読み込み (GPX/KML)</label>
+        <input type="file" id="input-layer-file" accept=".gpx,.kml" class="block w-full text-xs text-gray-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200">
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. 地図・変数・初期化
+    // =========================================================================
+    let map, currentMarker, ghostMarker;
+    let trackPolyline, ghostPolyline;
+    let watchId = null;
+    let isTracking = false;
+    let autoRecenter = true;
+
+    // 走行ログ保存構造
+    let currentTrack = []; // [{lat, lng, timestamp}]
+    let ghostData = null;  // Parseされたタイムスタンプ付き配列 [{lat, lng, timeOffset, speed}]
+    let ghostTotalDuration = 0;
+
+    // ゴースト再生制御
+    let ghostMode = 'vs'; // 'vs' | 'replay'
+    let replayTimer = null;
+    let replayTime = 0;
+    let replaySpeed = 1;
+    let trackingStartTime = null;
+
+    // タイルレイヤー定義
+    const tileLayers = {
+      gsi_light: L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {
+        attribution: '&copy; <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>'
+      }),
+      gsi_std: L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
+        attribution: '&copy; 国土地理院'
+      }),
+      gsi_ortho: L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {
+        attribution: '&copy; 国土地理院'
+      }),
+      osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }),
+      esri_sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri'
+      })
+    };
+
+    // 地図初期化
+    document.addEventListener('DOMContentLoaded', () => {
+      map = L.map('map', {
+        zoomControl: false
+      }).setView([35.681236, 139.767125], 15); // 初期値: 東京駅
+
+      // 初期レイヤー設定 (国土地理院 淡色)
+      tileLayers.gsi_light.addTo(map);
+
+      // マーカー・ポリライン初期構築
+      currentMarker = L.marker([0, 0], {
+        icon: L.divIcon({ className: 'marker-current', iconSize: [16, 16] })
+      });
+
+      ghostMarker = L.marker([0, 0], {
+        icon: L.divIcon({ className: 'marker-ghost', iconSize: [18, 18] })
+      });
+
+      trackPolyline = L.polyline([], { color: '#ef4444', weight: 4, opacity: 0.8 }).addTo(map);
+      ghostPolyline = L.polyline([], { color: '#06b6d4', weight: 4, opacity: 0.5, dashArray: '6, 6' }).addTo(map);
+
+      // イベントリスナー設定
+      setupEventListeners();
+    });
+
+    // =========================================================================
+    // 2. GPXゴーストデータの解析 & 補間ロジック
+    // =========================================================================
+    function parseGhostGPX(gpxXmlString) {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(gpxXmlString, "text/xml");
+      const trkpts = xmlDoc.querySelectorAll("trkpt");
+
+      if (trkpts.length < 2) {
+        alert("有効なタイムスタンプ情報を含むGPXトラックポイントが見つかりませんでした。");
+        return null;
+      }
+
+      let parsedPoints = [];
+      let startTime = null;
+
+      trkpts.forEach((pt, idx) => {
+        const lat = parseFloat(pt.getAttribute("lat"));
+        const lng = parseFloat(pt.getAttribute("lon"));
+        const timeEl = pt.querySelector("time");
+
+        if (timeEl) {
+          const ptTime = new Date(timeEl.textContent).getTime();
+          if (startTime === null) startTime = ptTime;
+
+          const timeOffset = (ptTime - startTime) / 1000; // 秒単位経過時間
+
+          parsedPoints.push({
+            lat,
+            lng,
+            timeOffset
+          });
+        }
+      });
+
+      if (parsedPoints.length < 2) {
+        alert("GPX内に <time> タグが含まれていません。ゴースト機能にはタイムスタンプが必要です。");
+        return null;
+      }
+
+      ghostTotalDuration = parsedPoints[parsedPoints.length - 1].timeOffset;
+      return parsedPoints;
+    }
+
+    // 指定経過時間(t秒)におけるゴーストの位置と速度を線形補間計算
+    function getGhostStateAtTime(seconds) {
+      if (!ghostData || ghostData.length === 0) return null;
+
+      if (seconds <= 0) {
+        return { lat: ghostData[0].lat, lng: ghostData[0].lng, speed: 0 };
+      }
+
+      const lastPt = ghostData[ghostData.length - 1];
+      if (seconds >= lastPt.timeOffset) {
+        return { lat: lastPt.lat, lng: lastPt.lng, speed: 0 };
+      }
+
+      // 二分探索等で該当セグメントを探索
+      for (let i = 0; i < ghostData.length - 1; i++) {
+        const p1 = ghostData[i];
+        const p2 = ghostData[i + 1];
+
+        if (seconds >= p1.timeOffset && seconds <= p2.timeOffset) {
+          const ratio = (seconds - p1.timeOffset) / (p2.timeOffset - p1.timeOffset);
+          const lat = p1.lat + (p2.lat - p1.lat) * ratio;
+          const lng = p1.lng + (p2.lng - p1.lng) * ratio;
+
+          // 速度計算 (km/h)
+          const distMeters = calculateDistance(p1.lat, p1.lng, p2.lat, p2.lng);
+          const timeSec = p2.timeOffset - p1.timeOffset;
+          const speedKmH = timeSec > 0 ? (distMeters / timeSec) * 3.6 : 0;
+
+          return { lat, lng, speed: speedKmH };
+        }
+      }
+      return null;
+    }
+
+    // =========================================================================
+    // 3. リアルタイムVSモード & ゴースト演算
+    // =========================================================================
+    function updateVSMode(currentLat, currentLng) {
+      if (!ghostData || !trackingStartTime) return;
+
+      const elapsedSeconds = (Date.now() - trackingStartTime) / 1000;
+      const ghostState = getGhostStateAtTime(elapsedSeconds);
+
+      if (ghostState) {
+        // ゴーストマーカー更新
+        const ghostLatLng = [ghostState.lat, ghostState.lng];
+        ghostMarker.setLatLng(ghostLatLng);
+        if (!map.hasLayer(ghostMarker)) ghostMarker.addTo(map);
+
+        // 距離差計算（直線距離）
+        const distDiffMeters = calculateDistance(currentLat, currentLng, ghostState.lat, ghostState.lng);
+
+        // UI更新
+        document.getElementById('ghost-diff-time').textContent = formatTime(elapsedSeconds);
+        document.getElementById('ghost-diff-dist').textContent = `${Math.round(distDiffMeters)} m`;
+        document.getElementById('ghost-speed').textContent = `${ghostState.speed.toFixed(1)} km/h`;
+      }
+    }
+
+    // =========================================================================
+    // 4. リプレイモード制御
+    // =========================================================================
+    function startReplay() {
+      stopReplay();
+      if (!ghostData) return;
+
+      document.getElementById('replay-total-time').textContent = formatTime(ghostTotalDuration);
+
+      replayTimer = setInterval(() => {
+        replayTime += 0.2 * replaySpeed;
+        if (replayTime > ghostTotalDuration) {
+          replayTime = ghostTotalDuration;
+          stopReplay();
+        }
+
+        updateReplayUI();
+      }, 200);
+    }
+
+    function stopReplay() {
+      if (replayTimer) {
+        clearInterval(replayTimer);
+        replayTimer = null;
+      }
+      document.getElementById('btn-replay-play').textContent = '▶';
+    }
+
+    function updateReplayUI() {
+      const ghostState = getGhostStateAtTime(replayTime);
+      if (ghostState) {
+        ghostMarker.setLatLng([ghostState.lat, ghostState.lng]);
+        if (!map.hasLayer(ghostMarker)) ghostMarker.addTo(map);
+      }
+
+      document.getElementById('replay-current-time').textContent = formatTime(replayTime);
+      const progressPercent = (replayTime / ghostTotalDuration) * 100;
+      document.getElementById('replay-seekbar').value = progressPercent || 0;
+    }
+
+    // =========================================================================
+    // 5. GPS トラッキング処理
+    // =========================================================================
+    function toggleTracking() {
+      if (isTracking) {
+        // 停止
+        navigator.geolocation.clearWatch(watchId);
+        isTracking = false;
+        document.getElementById('btn-tracking-label').textContent = '記録開始';
+        document.getElementById('recording-dot').classList.remove('animate-ping');
+        document.getElementById('recording-dot').classList.add('bg-white');
+        document.getElementById('ghost-status-card').classList.add('hidden');
+      } else {
+        // 開始
+        if (!navigator.geolocation) {
+          alert('お使いの端末・ブラウザはGPS機能をサポートしていません。');
+          return;
+        }
+
+        currentTrack = [];
+        trackPolyline.setLatLngs([]);
+        trackingStartTime = Date.now();
+
+        watchId = navigator.geolocation.watchPosition(
+          handleGPSPosition,
+          handleGPSError,
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+
+        isTracking = true;
+        document.getElementById('btn-tracking-label').textContent = '記録中...';
+        document.getElementById('recording-dot').classList.remove('bg-white');
+        document.getElementById('recording-dot').classList.add('bg-red-200', 'animate-ping');
+
+        if (ghostData && ghostMode === 'vs') {
+          document.getElementById('ghost-status-card').classList.remove('hidden');
+        }
+      }
+    }
+
+    function handleGPSPosition(pos) {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const latLng = [lat, lng];
+
+      currentTrack.push({ lat, lng, timestamp: pos.timestamp });
+      trackPolyline.addLatLng(latLng);
+
+      currentMarker.setLatLng(latLng);
+      if (!map.hasLayer(currentMarker)) currentMarker.addTo(map);
+
+      if (autoRecenter) {
+        map.panTo(latLng);
+      }
+
+      // ゴーストVSモード同期
+      if (ghostData && ghostMode === 'vs') {
+        updateVSMode(lat, lng);
+      }
+    }
+
+    function handleGPSError(err) {
+      console.warn(`GPS Error (${err.code}): ${err.message}`);
+    }
+
+    // =========================================================================
+    // 6. ユーティリティ & イベントリスナー設定
+    // =========================================================================
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371e3; // 地球半径 (m)
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+      return R * c;
+    }
+
+    function formatTime(seconds) {
+      const m = Math.floor(seconds / 60);
+      const s = Math.floor(seconds % 60);
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function setupEventListeners() {
+      // トラッキングボタン
+      document.getElementById('btn-toggle-tracking').addEventListener('click', toggleTracking);
+
+      // 中央追従ボタン
+      document.getElementById('btn-recenter').addEventListener('click', () => {
+        autoRecenter = true;
+        if (currentMarker.getLatLng().lat !== 0) {
+          map.panTo(currentMarker.getLatLng());
+        }
+      });
+
+      // 設定パネル開閉
+      document.getElementById('btn-toggle-settings').addEventListener('click', () => {
+        document.getElementById('settings-panel').classList.toggle('hidden');
+      });
+
+      // 背景地図切り替え
+      document.getElementById('map-tile-select').addEventListener('change', (e) => {
+        Object.values(tileLayers).forEach(layer => map.removeLayer(layer));
+        tileLayers[e.target.value].addTo(map);
+      });
+
+      // ゴーストGPX選択
+      document.getElementById('btn-select-ghost').addEventListener('click', () => {
+        document.getElementById('input-ghost-file').click();
+      });
+
+      document.getElementById('input-ghost-file').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const parsed = parseGhostGPX(event.target.result);
+          if (parsed) {
+            ghostData = parsed;
+            const routeCoords = ghostData.map(p => [p.lat, p.lng]);
+            ghostPolyline.setLatLngs(routeCoords);
+            map.fitBounds(ghostPolyline.getBounds(), { padding: [30, 30] });
+
+            document.getElementById('ghost-filename').textContent = file.name;
+            document.getElementById('ghost-file-info').classList.remove('hidden');
+
+            // 初期位置にマーカー設置
+            ghostMarker.setLatLng(routeCoords[0]).addTo(map);
+          }
+        };
+        reader.readAsText(file);
+      });
+
+      // モード切り替え
+      document.getElementById('mode-vs').addEventListener('click', () => {
+        ghostMode = 'vs';
+        document.getElementById('mode-vs').className = 'py-1.5 rounded-md bg-white text-cyan-700 shadow-sm transition text-center';
+        document.getElementById('mode-replay').className = 'py-1.5 rounded-md hover:text-gray-800 transition text-center';
+        document.getElementById('replay-control-card').classList.add('hidden');
+        stopReplay();
+      });
+
+      document.getElementById('mode-replay').addEventListener('click', () => {
+        ghostMode = 'replay';
+        document.getElementById('mode-replay').className = 'py-1.5 rounded-md bg-white text-cyan-700 shadow-sm transition text-center';
+        document.getElementById('mode-vs').className = 'py-1.5 rounded-md hover:text-gray-800 transition text-center';
+        document.getElementById('ghost-status-card').classList.add('hidden');
+        if (ghostData) {
+          document.getElementById('replay-control-card').classList.remove('hidden');
+        }
+      });
+
+      // リプレイ再生コントロール
+      document.getElementById('btn-replay-play').addEventListener('click', () => {
+        if (replayTimer) {
+          stopReplay();
+        } else {
+          document.getElementById('btn-replay-play').textContent = '⏸';
+          startReplay();
+        }
+      });
+
+      // リプレイ速度
+      document.querySelectorAll('.btn-speed').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          document.querySelectorAll('.btn-speed').forEach(b => b.classList.remove('bg-cyan-600', 'font-bold'));
+          e.target.classList.add('bg-cyan-600', 'font-bold');
+          replaySpeed = parseFloat(e.target.dataset.speed);
+        });
+      });
+
+      // シークバー操作
+      document.getElementById('replay-seekbar').addEventListener('input', (e) => {
+        if (!ghostTotalDuration) return;
+        const pct = parseFloat(e.target.value);
+        replayTime = (pct / 100) * ghostTotalDuration;
+        updateReplayUI();
+      });
+
+      // KML/GPX レイヤー追加
+      document.getElementById('input-layer-file').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const dom = new DOMParser().parseFromString(event.target.result, 'text/xml');
+          const geojson = toGeoJSON.gpx(dom);
+          const layer = L.geoJSON(geojson, {
+            style: { color: '#8b5cf6', weight: 3, opacity: 0.7 }
+          }).addTo(map);
+          map.fitBounds(layer.getBounds());
+        };
+        reader.readAsText(file);
+      });
+    }
+  </script>
+</body>
+</html>
