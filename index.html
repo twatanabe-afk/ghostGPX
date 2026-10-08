@@ -1,84 +1,1107 @@
 <!DOCTYPE html>
-<html lang="ja" class="h-full">
+<html lang="ja" class="h-full bg-slate-950 text-slate-100">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GPS トラッカー & ゴーストランナー</title>
-    <!-- Apple Touch Icon & Favicon -->
-    <link rel="apple-touch-icon" id="apple-touch-icon" sizes="180x180" href="">
-    <link rel="icon" type="image/png" id="app-favicon" href="">
-    <script>
-        (function() {
-            try {
-                const canvas = document.createElement('canvas');
-                canvas.width = 180; canvas.height = 180;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    const grad = ctx.createLinearGradient(0, 0, 180, 180);
-                    grad.addColorStop(0, '#10b981');
-                    grad.addColorStop(1, '#047857');
-                    ctx.fillStyle = grad;
-                    ctx.fillRect(0, 0, 180, 180);
-                    ctx.save();
-                    ctx.translate(90, 86); ctx.scale(4.2, 4.2); ctx.translate(-12, -12);
-                    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.fillStyle = 'transparent';
-                    const pinPath = new Path2D('M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z');
-                    ctx.stroke(pinPath);
-                    ctx.beginPath(); ctx.arc(12, 10, 3, 0, Math.PI * 2); ctx.stroke();
-                    ctx.restore();
-                    const iconData = canvas.toDataURL('image/png');
-                    const appleIcon = document.getElementById('apple-touch-icon');
-                    if (appleIcon) appleIcon.href = iconData;
-                    const favicon = document.getElementById('app-favicon');
-                    if (favicon) favicon.href = iconData;
-                }
-            } catch (e) { console.error("Failed to generate apple touch icon", e); }
-        })();
-    </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>GPS Tracker & GPX Ghost</title>
+  
+  <!-- PWA Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/854/854878.png">
 
-    <!-- External Libraries -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://unpkg.com/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap">
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
+            ghost: { cyan: '#00d2ff', glow: '#00d2ff' }
+          }
+        }
+      }
+    }
+  </script>
 
-    <style id="kml-dynamic-label-styles"></style>
-    <style>
-        html, body { height: 100%; width: 100vw; margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <!-- JSZip and toGeoJSON for KMZ / KML / GPX handling -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://unpkg.com/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
+
+  <style>
+    /* Custom Map and UI Styles */
+    #map {
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+    .leaflet-top.leaflet-right {
+      top: 12px;
+      right: 12px;
+    }
+    .leaflet-control-zoom {
+      border: none !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
+    }
+    .leaflet-control-zoom a {
+      background-color: #1e293b !important;
+      color: #f8fafc !important;
+      border-color: #334155 !important;
+    }
+    
+    /* Pulsing GPS Dot Animation */
+    .gps-marker-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .gps-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 3px solid #ffffff;
+      box-shadow: 0 0 12px rgba(0,0,0,0.6);
+      transition: background-color 0.3s ease;
+    }
+    .gps-dot.recording {
+      animation: pulse-red 1.5s infinite;
+    }
+    
+    @keyframes pulse-red {
+      0% { box-shadow: 0 0 0 0 rgba(255, 45, 85, 0.8); }
+      70% { box-shadow: 0 0 0 14px rgba(255, 45, 85, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 45, 85, 0); }
+    }
+
+    /* Ghost Icon Style */
+    .ghost-marker {
+      font-size: 26px;
+      line-height: 1;
+      filter: drop-shadow(0 0 8px var(--ghost-glow-color, rgba(0, 210, 255, 0.9)));
+      text-align: center;
+      transition: transform 0.2s linear;
+    }
+
+    /* Glassmorphism UI Panels */
+    .glass-panel {
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    /* Safe Area padding for iOS Devices */
+    .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
+    .pt-safe { padding-top: env(safe-area-inset-top, 16px); }
+
+    /* Custom Input Range and Color styling */
+    input[type=range] {
+      accent-color: #00d2ff;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch {
+      border: none;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+
+<body class="h-full overflow-hidden flex flex-col font-sans select-none">
+
+  <header class="absolute top-0 left-0 right-0 z-10 pt-safe px-4 py-3 pointer-events-none flex justify-between items-start">
+    <div class="pointer-events-auto flex items-center space-x-2">
+      <div class="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
+        <i class="fa-solid fa-location-crosshairs text-sky-400"></i>
+        <span class="font-bold tracking-wide text-sm bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
+          GPX Ghost Tracker
+        </span>
+      </div>
+    </div>
+
+    <!-- Right Quick Actions -->
+    <div class="pointer-events-auto flex flex-col items-end gap-2">
+      <!-- Layer Selector Toggle Button -->
+      <button id="layerMenuBtn" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-slate-200 active:scale-95 transition shadow-lg" title="地図・レイヤー">
+        <i class="fa-solid fa-layer-group text-lg"></i>
+      </button>
+
+      <!-- Style Customization Panel Toggle Button -->
+      <button id="styleMenuBtn" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-sky-400 active:scale-95 transition shadow-lg" title="スタイル設定">
+        <i class="fa-solid fa-palette text-lg"></i>
+      </button>
+
+      <!-- Auto Follow Toggle -->
+      <button id="followBtn" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-sky-400 active:scale-95 transition shadow-lg" title="中心追従 ON/OFF">
+        <i class="fa-solid fa-compass text-lg"></i>
+      </button>
+    </div>
+  </header>
+
+  <div id="vsOverlay" class="absolute top-16 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-md hidden pointer-events-auto">
+    <div class="glass-panel rounded-2xl p-3 border border-sky-500/30 shadow-2xl flex items-center justify-between text-xs sm:text-sm">
+      <!-- Time Gap -->
+      <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 pr-1">
+        <span class="text-slate-400 text-[10px] uppercase tracking-wider">Time Gap</span>
+        <span id="vsTimeDiff" class="font-mono text-base sm:text-lg font-black text-sky-400">--:--</span>
+      </div>
+
+      <!-- Distance Gap -->
+      <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 px-1">
+        <span class="text-slate-400 text-[10px] uppercase tracking-wider">Distance Gap</span>
+        <span id="vsDistDiff" class="font-mono text-base sm:text-lg font-black text-emerald-400">0 m</span>
+      </div>
+
+      <!-- Speeds comparison -->
+      <div class="flex flex-col items-center flex-1 pl-1">
+        <span class="text-slate-400 text-[10px] uppercase tracking-wider">Speed (You / 👻)</span>
+        <div class="font-mono font-bold text-slate-200 text-xs sm:text-sm">
+          <span id="vsMySpeed" class="text-rose-400">0</span> / <span id="vsGhostSpeed" class="text-sky-400">0</span> <span class="text-[10px] text-slate-400">km/h</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map Layer Selection Modal -->
+  <div id="layerModal" class="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+    <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[80vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
+          <i class="fa-solid fa-map text-sky-400"></i> 地図・レイヤー設定
+        </h3>
+        <button id="closeLayerModal" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Map Tile Types -->
+      <div class="mb-5">
+        <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">ベース地図</label>
+        <div class="grid grid-cols-2 gap-2 text-xs" id="mapTileSelector">
+          <button data-tile="gsi_std" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium active">国土地理院 標準</button>
+          <button data-tile="gsi_pale" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium">国土地理院 淡色</button>
+          <button data-tile="gsi_photo" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium">国土地理院 写真</button>
+          <button data-tile="gsi_blank" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium">国土地理院 白地図</button>
+          <button data-tile="osm" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium">OpenStreetMap</button>
+          <button data-tile="opentopo" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium">OpenTopoMap</button>
+          <button data-tile="esri_sat" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium">Esri Satellite</button>
+        </div>
+      </div>
+
+      <!-- GPX / Overlay File Import -->
+      <div class="mb-4">
+        <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">GPX / KML / KMZ ファイル読み込み</label>
+        <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-slate-600 hover:border-sky-400 bg-slate-800/40 cursor-pointer transition">
+          <i class="fa-solid fa-file-circle-plus text-2xl text-sky-400 mb-1"></i>
+          <span class="text-xs text-slate-300 font-medium">ログファイルを選択 (.gpx, .kml, .kmz)</span>
+          <span class="text-[10px] text-slate-500 mt-0.5">iOS Safari対応（ファイル選択の制限解除済み）</span>
+          <input type="file" id="fileInput" accept=".gpx,.kml,.kmz,.xml,text/xml,application/gpx+xml,*/*" class="hidden">
+        </label>
+      </div>
+
+      <!-- Loaded Layers List -->
+      <div id="loadedFilesSection" class="hidden">
+        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">読み込み済みレイヤー</span>
+        <div id="layersList" class="space-y-1.5 max-h-32 overflow-y-auto text-xs"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Display Style Customization Modal -->
+  <div id="styleModal" class="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+    <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[85vh] overflow-y-auto">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
+          <i class="fa-solid fa-palette text-sky-400"></i> トラック＆表示スタイル設定
+        </h3>
+        <button id="closeStyleModal" class="text-slate-400 hover:text-white p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- GPX Ghost Style Section (Default: Blue spectrum) -->
+      <div class="mb-6 bg-slate-900/60 p-3.5 rounded-xl border border-sky-500/30">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+            <span>👻</span> GPXゴースト表示 (デフォルト: 青系)
+          </span>
+          <input type="color" id="ghostColorPicker" value="#00d2ff" class="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0">
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <div class="flex justify-between text-slate-400 mb-1">
+              <span>線の太さ (Weight)</span>
+              <span id="ghostWeightVal" class="font-mono text-slate-200">5 px</span>
+            </div>
+            <input type="range" id="ghostWeightSlider" min="1" max="10" value="5" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+          </div>
+
+          <div>
+            <div class="flex justify-between text-slate-400 mb-1">
+              <span>不透明度 (Opacity)</span>
+              <span id="ghostOpacityVal" class="font-mono text-slate-200">80 %</span>
+            </div>
+            <input type="range" id="ghostOpacitySlider" min="10" max="100" value="80" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+          </div>
+        </div>
+      </div>
+
+      <!-- Current Location & Live Track Style Section (Default: Red spectrum) -->
+      <div class="bg-slate-900/60 p-3.5 rounded-xl border border-rose-500/30">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i class="fa-solid fa-location-dot"></i> 現在地＆走行ログ (デフォルト: 赤系)
+          </span>
+          <input type="color" id="myColorPicker" value="#ff2d55" class="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0">
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <div class="flex justify-between text-slate-400 mb-1">
+              <span>線の太さ (Weight)</span>
+              <span id="myWeightVal" class="font-mono text-slate-200">5 px</span>
+            </div>
+            <input type="range" id="myWeightSlider" min="1" max="10" value="5" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+          </div>
+
+          <div>
+            <div class="flex justify-between text-slate-400 mb-1">
+              <span>不透明度 (Opacity)</span>
+              <span id="myOpacityVal" class="font-mono text-slate-200">90 %</span>
+            </div>
+            <input type="range" id="myOpacitySlider" min="10" max="100" value="90" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main class="flex-1 relative w-full h-full">
+    <div id="map"></div>
+  </main>
+
+  <footer class="absolute bottom-0 left-0 right-0 z-20 pointer-events-none pb-safe px-3 py-2 flex flex-col items-center gap-2">
+    
+    <!-- Ghost Replay Control Panel -->
+    <div id="ghostPlayerPanel" class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-3 shadow-2xl border border-sky-500/20 hidden transition-all">
+      <div class="flex items-center justify-between text-xs mb-1.5 px-1">
+        <div class="flex items-center gap-1.5 truncate pr-2">
+          <span class="text-base">👻</span>
+          <span id="ghostFileName" class="font-bold text-sky-300 truncate">Ghost Track</span>
+        </div>
+        <div class="font-mono text-slate-400 text-[11px] shrink-0">
+          <span id="ghostCurrentTime" class="text-sky-400">00:00</span> / <span id="ghostTotalTime">00:00</span>
+        </div>
+      </div>
+
+      <!-- Seek Bar Slider -->
+      <div class="px-1 mb-2">
+        <input type="range" id="ghostSeekBar" min="0" max="100" value="0" step="0.1" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+      </div>
+
+      <!-- Control Buttons -->
+      <div class="flex items-center justify-center gap-4 text-slate-200">
+        <button id="ghostResetBtn" class="p-1.5 text-slate-400 hover:text-sky-400 transition" title="最初に戻る">
+          <i class="fa-solid fa-backward-step text-base"></i>
+        </button>
+        <button id="ghostRewindBtn" class="p-1.5 text-slate-400 hover:text-sky-400 transition" title="-5秒">
+          <i class="fa-solid fa-rotate-left text-sm"></i> <span class="text-[10px] font-bold">5s</span>
+        </button>
         
-        /* 地図エリア固定スタイル */
-        #map {
-            width: 100% !important;
-            height: 100% !important;
-            min-height: 100% !important;
-            z-index: 1;
-            background-color: #020617;
+        <button id="ghostPlayPauseBtn" class="w-10 h-10 rounded-full bg-sky-400 hover:bg-sky-300 text-slate-950 font-bold flex items-center justify-center shadow-lg shadow-sky-400/30 transition active:scale-95">
+          <i class="fa-solid fa-play text-base ml-0.5" id="ghostPlayIcon"></i>
+        </button>
+
+        <button id="ghostForwardBtn" class="p-1.5 text-slate-400 hover:text-sky-400 transition" title="+5秒">
+          <span class="text-[10px] font-bold">5s</span> <i class="fa-solid fa-rotate-right text-sm"></i>
+        </button>
+        <button id="ghostClearBtn" class="p-1.5 text-rose-400 hover:text-rose-300 transition" title="ゴースト解除">
+          <i class="fa-solid fa-trash-can text-base"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Live GPS Tracker Control Toolbar -->
+    <div class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-2">
+      <!-- Live Stats Display -->
+      <div class="flex items-center gap-3 pl-2">
+        <div class="flex flex-col">
+          <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">記録時間</span>
+          <span id="recTime" class="font-mono text-base font-black text-slate-100">00:00:00</span>
+        </div>
+        <div class="h-6 w-px bg-slate-700/80"></div>
+        <div class="flex flex-col">
+          <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">走行距離</span>
+          <span id="recDist" class="font-mono text-base font-black text-emerald-400">0.00 <span class="text-[10px] font-normal text-slate-400">km</span></span>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-2">
+        <!-- Start / Stop GPS Recording -->
+        <button id="recToggleBtn" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition active:scale-95">
+          <i class="fa-solid fa-play text-xs"></i> <span>記録開始</span>
+        </button>
+
+        <!-- Export GPX Button -->
+        <button id="exportGpxBtn" class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center border border-slate-700 transition active:scale-95 disabled:opacity-40" disabled title="GPXエクスポート">
+          <i class="fa-solid fa-download text-sm"></i>
+        </button>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Notification Toast Container -->
+  <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2 rounded-xl text-xs font-semibold text-slate-100 border border-slate-700 shadow-2xl pointer-events-none opacity-0 transition-opacity duration-300">
+    <span id="toastMsg">Notification</span>
+  </div>
+
+  <script>
+    const KORIYAMA_LAT = 37.398;
+    const KORIYAMA_LNG = 140.388;
+
+    const TILE_MAPS = {
+      gsi_std: 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
+      gsi_pale: 'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',
+      gsi_photo: 'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg',
+      gsi_blank: 'https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png',
+      osm: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      opentopo: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+      esri_sat: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+    };
+
+    const ATTRIBUTIONS = {
+      gsi: '国土地理院',
+      osm: '© OpenStreetMap contributors',
+      opentopo: '© OpenTopoMap',
+      esri: 'Tiles © Esri'
+    };
+
+    // Custom Style Configuration (Blue Ghost / Red GPS Defaults)
+    const styleConfig = {
+      ghost: {
+        color: '#00d2ff',
+        weight: 5,
+        opacity: 0.8
+      },
+      myTrack: {
+        color: '#ff2d55',
+        weight: 5,
+        opacity: 0.9
+      }
+    };
+
+    // App core variables
+    let map = null;
+    let currentTileLayer = null;
+    let watchPositionId = null;
+    let autoFollow = true;
+
+    // GPS Recording state
+    let isRecording = false;
+    let recStartTime = 0;
+    let recTimerInterval = null;
+    let recordedPoints = [];
+    let currentGpsLocation = null;
+    let recPolyline = null;
+    let userMarker = null;
+
+    // Ghost Engine state
+    let ghostData = null;
+    let ghostMarker = null;
+    let ghostPolyline = null;
+    let isGhostPlaying = false;
+    let ghostCurrentTimeSec = 0;
+    let ghostAnimationTimer = null;
+    let isVsModeActive = false;
+
+    // Additional Layer overlays
+    let loadedLayers = [];
+
+    window.addEventListener('load', () => {
+      initMap();
+      initEventListeners();
+      startGpsTracking();
+    });
+
+    function initMap() {
+      // Initial location set to Koriyama City, Fukushima
+      map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView([KORIYAMA_LAT, KORIYAMA_LNG], 13);
+
+      // Add Zoom Control to Top Right
+      L.control.zoom({ position: 'topright' }).addTo(map);
+
+      // Set default base tile layer
+      setBaseTile('gsi_std');
+
+      // Live GPS Track Polyline (Configurable Red default)
+      recPolyline = L.polyline([], {
+        color: styleConfig.myTrack.color,
+        weight: styleConfig.myTrack.weight,
+        opacity: styleConfig.myTrack.opacity,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(map);
+
+      // User Position Marker
+      const userDotIcon = L.divIcon({
+        className: 'gps-marker-container',
+        html: `<div id="gpsDotEl" class="gps-dot idle" style="background-color: ${styleConfig.myTrack.color}; border-color: #ffffff;"></div>`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+      userMarker = L.marker([KORIYAMA_LAT, KORIYAMA_LNG], { icon: userDotIcon }).addTo(map);
+    }
+
+    function setBaseTile(type) {
+      if (currentTileLayer) map.removeLayer(currentTileLayer);
+
+      const url = TILE_MAPS[type] || TILE_MAPS.gsi_std;
+      let attr = ATTRIBUTIONS.gsi;
+      if (type === 'osm') attr = ATTRIBUTIONS.osm;
+      if (type === 'opentopo') attr = ATTRIBUTIONS.opentopo;
+      if (type === 'esri_sat') attr = ATTRIBUTIONS.esri;
+
+      currentTileLayer = L.tileLayer(url, {
+        maxZoom: 18,
+        attribution: attr
+      }).addTo(map);
+
+      // Update button visual active state
+      document.querySelectorAll('#mapTileSelector button').forEach(btn => {
+        if (btn.dataset.tile === type) {
+          btn.classList.add('border-sky-500', 'bg-sky-950/40', 'text-sky-400');
+          btn.classList.remove('border-slate-700', 'bg-slate-800/60');
+        } else {
+          btn.classList.remove('border-sky-500', 'bg-sky-950/40', 'text-sky-400');
+          btn.classList.add('border-slate-700', 'bg-slate-800/60');
+        }
+      });
+    }
+
+    function startGpsTracking() {
+      if (!('geolocation' in navigator)) {
+        showToast('⚠️ お使いのブラウザはGPSをサポートしていません');
+        return;
+      }
+
+      watchPositionId = navigator.geolocation.watchPosition(
+        handleGpsSuccess,
+        handleGpsError,
+        {
+          enableHighAccuracy: true,
+          maximumAge: 1000,
+          timeout: 10000
+        }
+      );
+    }
+
+    function handleGpsSuccess(pos) {
+      const { latitude, longitude, speed } = pos.coords;
+      const now = new Date();
+      currentGpsLocation = { lat: latitude, lng: longitude, speed: speed || 0, time: now };
+
+      const latLng = [latitude, longitude];
+      userMarker.setLatLng(latLng);
+
+      if (autoFollow) {
+        map.panTo(latLng, { animate: true });
+      }
+
+      if (isRecording) {
+        recordedPoints.push(currentGpsLocation);
+        recPolyline.addLatLng(latLng);
+
+        const totalDistMeters = calculateTrackDistance(recordedPoints);
+        document.getElementById('recDist').innerHTML = `${(totalDistMeters / 1000).toFixed(2)} <span class="text-[10px] font-normal text-slate-400">km</span>`;
+
+        if (ghostData && isVsModeActive) {
+          updateVsModeStats(currentGpsLocation);
+        }
+      }
+    }
+
+    function handleGpsError(err) {
+      console.warn('GPS Warning:', err);
+    }
+
+    function toggleRecording() {
+      if (!isRecording) {
+        // Start Live Recording
+        isRecording = true;
+        recordedPoints = [];
+        recPolyline.setLatLngs([]);
+        recStartTime = Date.now();
+
+        document.getElementById('recToggleBtn').className = "px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-rose-500 hover:bg-rose-400 text-white shadow-lg shadow-rose-500/20 flex items-center gap-1.5 transition active:scale-95";
+        document.getElementById('recToggleBtn').innerHTML = `<i class="fa-solid fa-square text-xs"></i> <span>記録停止</span>`;
+        document.getElementById('gpsDotEl').className = "gps-dot recording";
+        document.getElementById('exportGpxBtn').disabled = true;
+
+        recTimerInterval = setInterval(updateRecTimer, 1000);
+
+        // Synchronize VS Ghost Mode
+        if (ghostData) {
+          pauseGhostReplay();
+          isVsModeActive = true;
+          ghostCurrentTimeSec = 0;
+          updateGhostMarkerPosition(0);
+          document.getElementById('vsOverlay').classList.remove('hidden');
+          showToast('⚔️ VS並走モードスタート！');
+        } else {
+          showToast('🔴 GPS記録を開始しました');
         }
 
-        .leaflet-popup-content-wrapper { border-radius: 12px; padding: 4px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
-        .leaflet-container { font-family: 'Inter', sans-serif; }
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 9999px; }
-        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+      } else {
+        // Stop Recording
+        isRecording = false;
+        clearInterval(recTimerInterval);
 
-        /* ズームボタン設定（右上配置・重なり防止） */
-        .leaflet-control-zoom {
-            border: none !important; box-shadow: none !important;
-            display: flex !important; flex-direction: column !important; gap: 8px !important;
-            margin-right: 16px !important; margin-top: 175px !important;
-        }
-        .leaflet-control-zoom-in, .leaflet-control-zoom-out {
-            width: 44px !important; height: 44px !important; line-height: 42px !important;
-            font-size: 22px !important; font-weight: 500 !important;
-            background-color: rgba(15, 23, 42, 0.9) !important; color: #e2e8f0 !important;
-            border: 1px solid rgba(51, 65, 85, 0.8) !important; border-radius: 12px !important;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3) !important; backdrop-filter: blur(4px) !important;
-            transition: all 0.15s ease !important; display: flex !important; align-items: center !important; justify-content: center !important;
+        document.getElementById('recToggleBtn').className = "px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition active:scale-95";
+        document.getElementById('recToggleBtn').innerHTML = `<i class="fa-solid fa-play text-xs"></i> <span>記録開始</span>`;
+        document.getElementById('gpsDotEl').className = "gps-dot idle";
+
+        if (recordedPoints.length > 0) {
+          document.getElementById('exportGpxBtn').disabled = false;
         }
 
-        .pulse-dot-red {
-            background-color: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 6
+        if (isVsModeActive) {
+          isVsModeActive = false;
+          document.getElementById('vsOverlay').classList.add('hidden');
+        }
+
+        showToast('⏹ 記録を停止しました');
+      }
+    }
+
+    function updateRecTimer() {
+      const elapsedMs = Date.now() - recStartTime;
+      document.getElementById('recTime').textContent = formatSeconds(Math.floor(elapsedMs / 1000), true);
+
+      if (isVsModeActive && ghostData) {
+        ghostCurrentTimeSec = elapsedMs / 1000;
+        if (ghostCurrentTimeSec <= ghostData.totalDurationSec) {
+          updateGhostMarkerPosition(ghostCurrentTimeSec);
+          document.getElementById('ghostSeekBar').value = (ghostCurrentTimeSec / ghostData.totalDurationSec) * 100;
+          document.getElementById('ghostCurrentTime').textContent = formatSeconds(ghostCurrentTimeSec);
+        }
+      }
+    }
+
+    function loadGhostFile(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target.result;
+        parseAndSetGhost(content, file.name);
+      };
+      reader.readAsText(file);
+    }
+
+    function parseAndSetGhost(xmlText, fileName) {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+      const trkptNodes = xmlDoc.querySelectorAll('trkpt');
+
+      if (trkptNodes.length < 2) {
+        showToast('⚠️ GPXファイルにタイムスタンプ付トラックデータが見つかりません');
+        return;
+      }
+
+      let parsedPoints = [];
+      let startTime = null;
+
+      trkptNodes.forEach((node, index) => {
+        const lat = parseFloat(node.getAttribute('lat'));
+        const lng = parseFloat(node.getAttribute('lon'));
+        const timeNode = node.querySelector('time');
+
+        if (lat && lng) {
+          let timeOffset = index * 2;
+          if (timeNode) {
+            const pointTime = new Date(timeNode.textContent).getTime();
+            if (index === 0) startTime = pointTime;
+            if (startTime) timeOffset = (pointTime - startTime) / 1000;
+          }
+
+          parsedPoints.push({ lat, lng, timeOffsetSec: timeOffset });
+        }
+      });
+
+      // Calculate instantaneous speeds
+      for (let i = 0; i < parsedPoints.length; i++) {
+        if (i === 0) {
+          parsedPoints[i].speed = 0;
+        } else {
+          const prev = parsedPoints[i - 1];
+          const curr = parsedPoints[i];
+          const dMeters = getDistanceMeters(prev.lat, prev.lng, curr.lat, curr.lng);
+          const dT = curr.timeOffsetSec - prev.timeOffsetSec;
+          curr.speed = dT > 0 ? (dMeters / dT) * 3.6 : 0;
+        }
+      }
+
+      const totalDurationSec = parsedPoints[parsedPoints.length - 1].timeOffsetSec;
+
+      clearGhostData();
+
+      // Render Ghost Polyline using configured Blue default style
+      const latLngs = parsedPoints.map(p => [p.lat, p.lng]);
+      ghostPolyline = L.polyline(latLngs, {
+        color: styleConfig.ghost.color,
+        weight: styleConfig.ghost.weight,
+        opacity: styleConfig.ghost.opacity,
+        dashArray: '6, 8',
+        lineCap: 'round'
+      }).addTo(map);
+
+      // Render Ghost Marker
+      const ghostIcon = L.divIcon({
+        className: 'ghost-marker',
+        html: `👻`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      });
+      ghostMarker = L.marker(latLngs[0], { icon: ghostIcon }).addTo(map);
+
+      ghostData = {
+        name: fileName,
+        points: parsedPoints,
+        totalDurationSec: totalDurationSec
+      };
+
+      map.fitBounds(ghostPolyline.getBounds(), { padding: [40, 40] });
+
+      document.getElementById('ghostFileName').textContent = fileName;
+      document.getElementById('ghostTotalTime').textContent = formatSeconds(totalDurationSec);
+      document.getElementById('ghostPlayerPanel').classList.remove('hidden');
+
+      showToast(`👻 ゴースト読み込み完了: ${fileName}`);
+    }
+
+    function getGhostStateAtTime(sec) {
+      if (!ghostData || ghostData.points.length === 0) return null;
+      const pts = ghostData.points;
+
+      if (sec <= 0) return pts[0];
+      if (sec >= ghostData.totalDurationSec) return pts[pts.length - 1];
+
+      for (let i = 0; i < pts.length - 1; i++) {
+        if (sec >= pts[i].timeOffsetSec && sec <= pts[i + 1].timeOffsetSec) {
+          const p1 = pts[i];
+          const p2 = pts[i + 1];
+          const ratio = (sec - p1.timeOffsetSec) / (p2.timeOffsetSec - p1.timeOffsetSec);
+
+          return {
+            lat: p1.lat + (p2.lat - p1.lat) * ratio,
+            lng: p1.lng + (p2.lng - p1.lng) * ratio,
+            speed: p1.speed + (p2.speed - p1.speed) * ratio
+          };
+        }
+      }
+      return pts[pts.length - 1];
+    }
+
+    function updateGhostMarkerPosition(timeSec) {
+      const state = getGhostStateAtTime(timeSec);
+      if (state && ghostMarker) {
+        ghostMarker.setLatLng([state.lat, state.lng]);
+      }
+    }
+
+    function toggleGhostPlayPause() {
+      if (isRecording) {
+        showToast('⚠️ 記録(VSモード)中は手動再生操作が制限されます');
+        return;
+      }
+
+      if (isGhostPlaying) {
+        pauseGhostReplay();
+      } else {
+        startGhostReplay();
+      }
+    }
+
+    function startGhostReplay() {
+      if (!ghostData) return;
+      isGhostPlaying = true;
+
+      document.getElementById('ghostPlayIcon').className = "fa-solid fa-pause text-base ml-0";
+
+      let lastAnimTime = performance.now();
+
+      function step(now) {
+        if (!isGhostPlaying) return;
+        const deltaSec = (now - lastAnimTime) / 1000;
+        lastAnimTime = now;
+
+        ghostCurrentTimeSec += deltaSec;
+        if (ghostCurrentTimeSec >= ghostData.totalDurationSec) {
+          ghostCurrentTimeSec = ghostData.totalDurationSec;
+          pauseGhostReplay();
+        }
+
+        updateGhostMarkerPosition(ghostCurrentTimeSec);
+        document.getElementById('ghostSeekBar').value = (ghostCurrentTimeSec / ghostData.totalDurationSec) * 100;
+        document.getElementById('ghostCurrentTime').textContent = formatSeconds(ghostCurrentTimeSec);
+
+        ghostAnimationTimer = requestAnimationFrame(step);
+      }
+
+      ghostAnimationTimer = requestAnimationFrame(step);
+    }
+
+    function pauseGhostReplay() {
+      isGhostPlaying = false;
+      if (ghostAnimationTimer) cancelAnimationFrame(ghostAnimationTimer);
+      document.getElementById('ghostPlayIcon').className = "fa-solid fa-play text-base ml-0.5";
+    }
+
+    function clearGhostData() {
+      pauseGhostReplay();
+      if (ghostPolyline) map.removeLayer(ghostPolyline);
+      if (ghostMarker) map.removeLayer(ghostMarker);
+
+      ghostData = null;
+      ghostPolyline = null;
+      ghostMarker = null;
+      ghostCurrentTimeSec = 0;
+
+      document.getElementById('ghostPlayerPanel').classList.add('hidden');
+      document.getElementById('vsOverlay').classList.add('hidden');
+    }
+
+    function updateVsModeStats(myGps) {
+      if (!ghostData) return;
+
+      const ghostState = getGhostStateAtTime(ghostCurrentTimeSec);
+      if (!ghostState) return;
+
+      const gapMeters = getDistanceMeters(myGps.lat, myGps.lng, ghostState.lat, ghostState.lng);
+
+      let closestIdx = 0;
+      let minDist = Infinity;
+      ghostData.points.forEach((pt, i) => {
+        const d = getDistanceMeters(myGps.lat, myGps.lng, pt.lat, pt.lng);
+        if (d < minDist) {
+          minDist = d;
+          closestIdx = i;
+        }
+      });
+
+      const matchedGhostTimeSec = ghostData.points[closestIdx].timeOffsetSec;
+      const timeDiffSec = ghostCurrentTimeSec - matchedGhostTimeSec;
+
+      const timeDiffEl = document.getElementById('vsTimeDiff');
+      const formattedDiff = (timeDiffSec >= 0 ? '+' : '-') + formatSeconds(Math.abs(timeDiffSec));
+      timeDiffEl.textContent = formattedDiff;
+      timeDiffEl.className = timeDiffSec <= 0 ? "font-mono text-base sm:text-lg font-black text-emerald-400" : "font-mono text-base sm:text-lg font-black text-rose-400";
+
+      document.getElementById('vsDistDiff').textContent = `${Math.round(gapMeters)} m`;
+      document.getElementById('vsMySpeed').textContent = Math.round((myGps.speed || 0) * 3.6);
+      document.getElementById('vsGhostSpeed').textContent = Math.round(ghostState.speed || 0);
+    }
+
+    async function handleFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      try {
+        if (ext === 'gpx') {
+          loadGhostFile(file);
+        } else if (ext === 'kmz') {
+          const zip = await JSZip.loadAsync(file);
+          const kmlFile = Object.keys(zip.files).find(name => name.endsWith('.kml'));
+          if (kmlFile) {
+            const kmlText = await zip.files[kmlFile].async('string');
+            renderGeoJsonLayer(kmlText, file.name);
+          }
+        } else if (ext === 'kml' || ext === 'xml') {
+          const reader = new FileReader();
+          reader.onload = (evt) => renderGeoJsonLayer(evt.target.result, file.name);
+          reader.readAsText(file);
+        }
+      } catch (err) {
+        console.error(err);
+        showToast('❌ ファイルの読み込みに失敗しました');
+      }
+
+      e.target.value = '';
+      document.getElementById('layerModal').classList.add('hidden');
+    }
+
+    function renderGeoJsonLayer(xmlString, name) {
+      const dom = new DOMParser().parseFromString(xmlString, 'text/xml');
+      const geojson = toGeoJSON.kml(dom);
+
+      const layer = L.geoJSON(geojson, {
+        style: { color: '#a855f7', weight: 4, opacity: 0.7 }
+      }).addTo(map);
+
+      map.fitBounds(layer.getBounds(), { padding: [30, 30] });
+
+      loadedLayers.push({ id: Date.now(), name, layer });
+      updateLoadedLayersUI();
+      showToast(`📁 レイヤー読み込み: ${name}`);
+    }
+
+    function updateLoadedLayersUI() {
+      const listEl = document.getElementById('layersList');
+      const sec = document.getElementById('loadedFilesSection');
+
+      if (loadedLayers.length === 0) {
+        sec.classList.add('hidden');
+        return;
+      }
+
+      sec.classList.remove('hidden');
+      listEl.innerHTML = '';
+
+      loadedLayers.forEach(item => {
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between bg-slate-800/80 p-2 rounded-lg text-slate-200";
+        row.innerHTML = `
+          <span class="truncate pr-2">${item.name}</span>
+          <button onclick="removeLayer(${item.id})" class="text-rose-400 hover:text-rose-300 p-1">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        `;
+        listEl.appendChild(row);
+      });
+    }
+
+    window.removeLayer = function(id) {
+      const idx = loadedLayers.findIndex(l => l.id === id);
+      if (idx !== -1) {
+        map.removeLayer(loadedLayers[idx].layer);
+        loadedLayers.splice(idx, 1);
+        updateLoadedLayersUI();
+      }
+    };
+
+    function exportGpx() {
+      if (recordedPoints.length === 0) return;
+
+      let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+      gpx += `<gpx version="1.1" creator="GPX Ghost Tracker" xmlns="http://www.topografix.com/GPX/1/1">\n`;
+      gpx += `  <trk>\n    <name>Track_${new Date().toISOString()}</name>\n    <trkseg>\n`;
+
+      recordedPoints.forEach(pt => {
+        const timeStr = pt.time ? pt.time.toISOString() : new Date().toISOString();
+        gpx += `      <trkpt lat="${pt.lat}" lon="${pt.lng}">\n`;
+        gpx += `        <time>${timeStr}</time>\n`;
+        gpx += `      </trkpt>\n`;
+      });
+
+      gpx += `    </trkseg>\n  </trk>\n</gpx>`;
+
+      const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `track_${Date.now()}.gpx`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      showToast('💾 GPXファイルを保存しました');
+    }
+
+    function applyStyleUpdates() {
+      // Update Ghost track style
+      if (ghostPolyline) {
+        ghostPolyline.setStyle({
+          color: styleConfig.ghost.color,
+          weight: styleConfig.ghost.weight,
+          opacity: styleConfig.ghost.opacity
+        });
+      }
+
+      // Update Ghost glow color
+      document.documentElement.style.setProperty('--ghost-glow-color', styleConfig.ghost.color);
+
+      // Update Live Track style
+      if (recPolyline) {
+        recPolyline.setStyle({
+          color: styleConfig.myTrack.color,
+          weight: styleConfig.myTrack.weight,
+          opacity: styleConfig.myTrack.opacity
+        });
+      }
+
+      // Update GPS dot color
+      const dotEl = document.getElementById('gpsDotEl');
+      if (dotEl) {
+        dotEl.style.backgroundColor = styleConfig.myTrack.color;
+      }
+    }
+
+    function initEventListeners() {
+      // Map base tile selector
+      document.getElementById('mapTileSelector').addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (btn && btn.dataset.tile) {
+          setBaseTile(btn.dataset.tile);
+        }
+      });
+
+      // Modals
+      document.getElementById('layerMenuBtn').addEventListener('click', () => {
+        document.getElementById('layerModal').classList.remove('hidden');
+      });
+      document.getElementById('closeLayerModal').addEventListener('click', () => {
+        document.getElementById('layerModal').classList.add('hidden');
+      });
+
+      document.getElementById('styleMenuBtn').addEventListener('click', () => {
+        document.getElementById('styleModal').classList.remove('hidden');
+      });
+      document.getElementById('closeStyleModal').addEventListener('click', () => {
+        document.getElementById('styleModal').classList.add('hidden');
+      });
+
+      // File Input
+      document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+      // Follow toggle
+      document.getElementById('followBtn').addEventListener('click', () => {
+        autoFollow = !autoFollow;
+        const btn = document.getElementById('followBtn');
+        if (autoFollow) {
+          btn.className = "glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-sky-400 active:scale-95 transition shadow-lg";
+          if (currentGpsLocation) map.panTo([currentGpsLocation.lat, currentGpsLocation.lng]);
+          showToast('🎯 自動中央追従: ON');
+        } else {
+          btn.className = "glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 active:scale-95 transition shadow-lg";
+          showToast('🎯 自動中央追従: OFF');
+        }
+      });
+
+      // Recording toggle
+      document.getElementById('recToggleBtn').addEventListener('click', toggleRecording);
+      document.getElementById('exportGpxBtn').addEventListener('click', exportGpx);
+
+      // Ghost Player controls
+      document.getElementById('ghostPlayPauseBtn').addEventListener('click', toggleGhostPlayPause);
+      document.getElementById('ghostResetBtn').addEventListener('click', () => {
+        ghostCurrentTimeSec = 0;
+        updateGhostMarkerPosition(0);
+        document.getElementById('ghostSeekBar').value = 0;
+        document.getElementById('ghostCurrentTime').textContent = "00:00";
+      });
+      document.getElementById('ghostRewindBtn').addEventListener('click', () => {
+        ghostCurrentTimeSec = Math.max(0, ghostCurrentTimeSec - 5);
+        updateGhostMarkerPosition(ghostCurrentTimeSec);
+        document.getElementById('ghostSeekBar').value = (ghostCurrentTimeSec / ghostData.totalDurationSec) * 100;
+        document.getElementById('ghostCurrentTime').textContent = formatSeconds(ghostCurrentTimeSec);
+      });
+      document.getElementById('ghostForwardBtn').addEventListener('click', () => {
+        ghostCurrentTimeSec = Math.min(ghostData.totalDurationSec, ghostCurrentTimeSec + 5);
+        updateGhostMarkerPosition(ghostCurrentTimeSec);
+        document.getElementById('ghostSeekBar').value = (ghostCurrentTimeSec / ghostData.totalDurationSec) * 100;
+        document.getElementById('ghostCurrentTime').textContent = formatSeconds(ghostCurrentTimeSec);
+      });
+      document.getElementById('ghostClearBtn').addEventListener('click', clearGhostData);
+
+      document.getElementById('ghostSeekBar').addEventListener('input', (e) => {
+        if (!ghostData) return;
+        const pct = parseFloat(e.target.value);
+        ghostCurrentTimeSec = (pct / 100) * ghostData.totalDurationSec;
+        updateGhostMarkerPosition(ghostCurrentTimeSec);
+        document.getElementById('ghostCurrentTime').textContent = formatSeconds(ghostCurrentTimeSec);
+      });
+
+      // Realtime Style Controls Listeners
+      // Ghost Style
+      document.getElementById('ghostColorPicker').addEventListener('input', (e) => {
+        styleConfig.ghost.color = e.target.value;
+        applyStyleUpdates();
+      });
+      document.getElementById('ghostWeightSlider').addEventListener('input', (e) => {
+        styleConfig.ghost.weight = parseInt(e.target.value);
+        document.getElementById('ghostWeightVal').textContent = `${styleConfig.ghost.weight} px`;
+        applyStyleUpdates();
+      });
+      document.getElementById('ghostOpacitySlider').addEventListener('input', (e) => {
+        styleConfig.ghost.opacity = parseFloat(e.target.value) / 100;
+        document.getElementById('ghostOpacityVal').textContent = `${e.target.value} %`;
+        applyStyleUpdates();
+      });
+
+      // Live GPS Track Style
+      document.getElementById('myColorPicker').addEventListener('input', (e) => {
+        styleConfig.myTrack.color = e.target.value;
+        applyStyleUpdates();
+      });
+      document.getElementById('myWeightSlider').addEventListener('input', (e) => {
+        styleConfig.myTrack.weight = parseInt(e.target.value);
+        document.getElementById('myWeightVal').textContent = `${styleConfig.myTrack.weight} px`;
+        applyStyleUpdates();
+      });
+      document.getElementById('myOpacitySlider').addEventListener('input', (e) => {
+        styleConfig.myTrack.opacity = parseFloat(e.target.value) / 100;
+        document.getElementById('myOpacityVal').textContent = `${e.target.value} %`;
+        applyStyleUpdates();
+      });
+    }
+
+    function getDistanceMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function calculateTrackDistance(points) {
+      let dist = 0;
+      for (let i = 1; i < points.length; i++) {
+        dist += getDistanceMeters(points[i - 1].lat, points[i - 1].lng, points[i].lat, points[i].lng);
+      }
+      return dist;
+    }
+
+    function formatSeconds(sec, includeHours = false) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = Math.floor(sec % 60);
+
+      const pad = (n) => String(n).padStart(2, '0');
+
+      if (includeHours) {
+        return `${pad(h)}:${pad(m)}:${pad(s)}`;
+      }
+      return `${pad(m)}:${pad(s)}`;
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMsg').textContent = msg;
+      toast.classList.remove('opacity-0');
+      toast.classList.add('opacity-100');
+
+      setTimeout(() => {
+        toast.classList.remove('opacity-100');
+        toast.classList.add('opacity-0');
+      }, 3000);
+    }
+  </script>
+</body>
+</html>
