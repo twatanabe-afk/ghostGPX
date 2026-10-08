@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>GPS Tracker & GPX Ghost Player v2026.10.09.0632</title>
+  <title>GPS Tracker & GPX Ghost Player v2026.10.09.0831</title>
   
   <!-- PWA Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -45,6 +45,7 @@
       padding: 0;
       overflow: hidden !important;
       position: fixed;
+      touch-action: none;
     }
 
     #map {
@@ -53,15 +54,15 @@
       z-index: 1;
     }
 
-    /* Top Right Floating Toolbar for Controls */
+    /* Top Right Control Panel positioned safely below the HUD */
     .custom-map-controls {
       position: absolute;
       top: 14px;
       right: 14px;
-      z-index: 20;
+      z-index: 25;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 10px;
     }
 
     .ctrl-btn {
@@ -70,17 +71,18 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background-color: rgba(30, 41, 59, 0.92);
+      background-color: rgba(15, 23, 42, 0.88);
       color: #38bdf8;
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.18);
       border-radius: 12px;
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
-      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
-      font-size: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      font-size: 18px;
       font-weight: bold;
-      transition: all 0.2s ease;
+      transition: all 0.15s ease-in-out;
       cursor: pointer;
+      user-select: none;
     }
 
     .ctrl-btn:active {
@@ -114,7 +116,7 @@
     }
     
     @keyframes pulse-red {
-      0% { box-shadow: 0 0 0 0 rgba(255, 45, 85, 0.8); }
+      0% { box-shadow: 0 0 0 0 rgba(255, 45, 85, 0.85); }
       70% { box-shadow: 0 0 0 18px rgba(255, 45, 85, 0); }
       100% { box-shadow: 0 0 0 0 rgba(255, 45, 85, 0); }
     }
@@ -128,16 +130,16 @@
       transition: transform 0.2s linear;
     }
 
-    /* Glassmorphism Panel Container */
+    /* Glassmorphism Panel Base */
     .glass-panel {
-      background: rgba(15, 23, 42, 0.90);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
     }
 
     .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
-    .pt-safe { padding-top: env(safe-area-inset-top, 16px); }
+    .pt-safe { padding-top: env(safe-area-inset-top, 12px); }
 
     input[type=range] {
       accent-color: #00d2ff;
@@ -149,34 +151,52 @@
       border: none;
       border-radius: 6px;
     }
+
+    /* Version display at bottom right */
+    .version-badge {
+      position: absolute;
+      bottom: 22px;
+      right: 12px;
+      z-index: 10;
+      font-family: monospace;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.5);
+      background: rgba(15, 23, 42, 0.7);
+      padding: 2px 8px;
+      border-radius: 6px;
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
   </style>
 </head>
 
 <body class="h-full overflow-hidden flex flex-col font-sans select-none bg-slate-950 text-slate-100">
 
-  <header class="absolute top-0 left-0 right-0 z-10 pt-safe px-4 py-3 pointer-events-none flex justify-between items-start">
-    <div class="pointer-events-auto flex items-center space-x-2">
-      <div class="glass-panel px-3.5 py-2 rounded-xl flex items-center gap-2 shadow-xl">
-        <i class="fa-solid fa-location-crosshairs text-sky-400"></i>
-        <div class="flex flex-col">
-          <span class="font-bold tracking-wide text-xs sm:text-sm bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
-            GPX Ghost Tracker
-          </span>
-          <span class="text-[9px] font-mono text-slate-400 tracking-wider">v2026.10.09.0632</span>
+  <!-- VS Mode / Replay HUD Panel (Fixed at VERY TOP CENTER) -->
+  <div id="vsOverlay" class="absolute top-3 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-sm sm:max-w-md hidden pointer-events-auto pt-safe">
+    <div class="glass-panel rounded-2xl p-2.5 sm:p-3 border border-sky-500/30 shadow-2xl flex items-center justify-between text-xs sm:text-sm">
+      <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 pr-1">
+        <span class="text-slate-400 text-[9px] uppercase tracking-wider font-bold">Time Gap</span>
+        <span id="vsTimeDiff" class="font-mono text-base sm:text-lg font-black text-sky-400">--:--</span>
+      </div>
+
+      <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 px-1">
+        <span class="text-slate-400 text-[9px] uppercase tracking-wider font-bold">Distance Gap</span>
+        <span id="vsDistDiff" class="font-mono text-base sm:text-lg font-black text-emerald-400">0 m</span>
+      </div>
+
+      <div class="flex flex-col items-center flex-1 pl-1">
+        <span class="text-slate-400 text-[9px] uppercase tracking-wider font-bold">Speed (You / 👻)</span>
+        <div class="font-mono font-bold text-slate-200 text-xs sm:text-sm">
+          <span id="vsMySpeed" class="text-rose-400">0</span> / <span id="vsGhostSpeed" class="text-sky-400">0</span> <span class="text-[9px] text-slate-400">km/h</span>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Quick Style Button -->
-    <div class="pointer-events-auto pr-16">
-      <button id="styleMenuBtn" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-sky-400 active:scale-95 transition shadow-lg" title="スタイル設定">
-        <i class="fa-solid fa-palette text-lg"></i>
-      </button>
-    </div>
-  </header>
-
-  <!-- Top Map Action Controls Container (Top Right Aligned) -->
-  <div class="custom-map-controls">
+  <!-- Top-Right Control Toolbar (Positioned below top HUD) -->
+  <div class="custom-map-controls pt-safe">
     <button id="zoomInBtn" class="ctrl-btn" title="拡大">
       <i class="fa-solid fa-plus"></i>
     </button>
@@ -186,32 +206,13 @@
     <button id="layerMenuBtn" class="ctrl-btn" title="地図・レイヤー">
       <i class="fa-solid fa-map"></i>
     </button>
-  </div>
-
-  <!-- VS Mode Real-time Statistics Banner -->
-  <div id="vsOverlay" class="absolute top-16 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-md hidden pointer-events-auto">
-    <div class="glass-panel rounded-2xl p-3 border border-sky-500/30 shadow-2xl flex items-center justify-between text-xs sm:text-sm">
-      <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 pr-1">
-        <span class="text-slate-400 text-[10px] uppercase tracking-wider">Time Gap</span>
-        <span id="vsTimeDiff" class="font-mono text-base sm:text-lg font-black text-sky-400">--:--</span>
-      </div>
-
-      <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 px-1">
-        <span class="text-slate-400 text-[10px] uppercase tracking-wider">Distance Gap</span>
-        <span id="vsDistDiff" class="font-mono text-base sm:text-lg font-black text-emerald-400">0 m</span>
-      </div>
-
-      <div class="flex flex-col items-center flex-1 pl-1">
-        <span class="text-slate-400 text-[10px] uppercase tracking-wider">Speed (You / 👻)</span>
-        <div class="font-mono font-bold text-slate-200 text-xs sm:text-sm">
-          <span id="vsMySpeed" class="text-rose-400">0</span> / <span id="vsGhostSpeed" class="text-sky-400">0</span> <span class="text-[10px] text-slate-400">km/h</span>
-        </div>
-      </div>
-    </div>
+    <button id="styleMenuBtn" class="ctrl-btn" title="スタイル設定">
+      <i class="fa-solid fa-palette"></i>
+    </button>
   </div>
 
   <!-- Layer & Basemap Selection Modal -->
-  <div id="layerModal" class="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+  <div id="layerModal" class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
     <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[80vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
         <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
@@ -253,14 +254,14 @@
   </div>
 
   <!-- Style Settings Modal -->
-  <div id="styleModal" class="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
+  <div id="styleModal" class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
     <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[85vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
         <div>
           <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
             <i class="fa-solid fa-palette text-sky-400"></i> トラック＆表示スタイル設定
           </h3>
-          <span class="text-[10px] font-mono text-slate-400">Version v2026.10.09.0632</span>
+          <span class="text-[10px] font-mono text-slate-400">Version v2026.10.09.0831</span>
         </div>
         <button id="closeStyleModal" class="text-slate-400 hover:text-white p-1">
           <i class="fa-solid fa-xmark text-lg"></i>
@@ -327,6 +328,7 @@
 
   <main class="flex-1 relative w-full h-full overflow-hidden">
     <div id="map"></div>
+    <div class="version-badge">v2026.10.09.0831</div>
   </main>
 
   <footer class="absolute bottom-0 left-0 right-0 z-20 pointer-events-none pb-safe px-3 py-2 flex flex-col items-center gap-2">
@@ -371,7 +373,7 @@
     <!-- Main Control Toolbar -->
     <div class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-2.5 sm:p-3 shadow-2xl flex items-center justify-between gap-2">
       
-      <!-- Auto Target Tracking Switcher (Off -> Live Location -> Ghost) without target icon -->
+      <!-- Auto Target Tracking Switcher without target icon -->
       <button id="trackTargetBtn" class="px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center transition active:scale-95 shrink-0" title="追尾ターゲット切り替え">
         <span id="trackTargetLabel">追尾: 現在地</span>
       </button>
@@ -408,13 +410,13 @@
   </div>
 
   <script>
-    const APP_VERSION = 'v2026.10.09.0632';
+    const APP_VERSION = 'v2026.10.09.0831';
 
-    // Koriyama City Initial Coordinates
+    // Default Koriyama City Coordinates
     const KORIYAMA_LAT = 37.398;
     const KORIYAMA_LNG = 140.388;
 
-    // Map Tile Services
+    // Basemap Tiles
     const TILE_MAPS = {
       gsi_pale: 'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',
       gsi_std: 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
@@ -432,7 +434,7 @@
       esri: 'Tiles © Esri'
     };
 
-    // Track Display Style Configurations
+    // Default Track Styles
     const styleConfig = {
       ghost: {
         color: '#00d2ff', // Cyan/Blue
@@ -449,12 +451,12 @@
     // Auto Tracing Mode State: 'OFF' | 'MY_LOCATION' | 'GHOST'
     let tracingMode = 'MY_LOCATION';
 
-    // Core Map Objects
+    // Core Map Variables
     let map = null;
     let currentTileLayer = null;
     let watchPositionId = null;
 
-    // Live GPS Recording State
+    // GPS Recording State
     let isRecording = false;
     let recStartTime = 0;
     let recTimerInterval = null;
@@ -473,7 +475,7 @@
     let ghostAnimationTimer = null;
     let isVsModeActive = false;
 
-    // Loaded KML / KMZ Layers
+    // Loaded KML/KMZ Overlay Layers
     let loadedLayers = [];
 
     window.addEventListener('load', () => {
