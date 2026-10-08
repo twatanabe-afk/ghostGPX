@@ -2,7 +2,7 @@
 <html lang="ja" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GPS トラッカー & ゴーストランナー</title>
     <!-- Apple Touch Icon & Favicon -->
     <link rel="apple-touch-icon" id="apple-touch-icon" sizes="180x180" href="">
@@ -36,7 +36,7 @@
         })();
     </script>
 
-    <!-- External Libraries -->
+    <!-- External Libraries (ベースアプリと同構成) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
@@ -47,17 +47,7 @@
 
     <style id="kml-dynamic-label-styles"></style>
     <style>
-        html, body { height: 100%; width: 100vw; margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
-        
-        /* 地図エリアの潰れ防止固定スタイル */
-        #map {
-            width: 100% !important;
-            height: 100% !important;
-            min-height: 100% !important;
-            z-index: 1;
-            background-color: #020617;
-        }
-
+        body { font-family: 'Inter', sans-serif; }
         .leaflet-popup-content-wrapper { border-radius: 12px; padding: 4px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
         .leaflet-container { font-family: 'Inter', sans-serif; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -68,4 +58,884 @@
         .leaflet-control-zoom {
             border: none !important; box-shadow: none !important;
             display: flex !important; flex-direction: column !important; gap: 8px !important;
-            margin-right: 16px !important; margin-bottom: 24px !important
+            margin-right: 16px !important; margin-bottom: 24px !important;
+        }
+        .leaflet-control-zoom-in, .leaflet-control-zoom-out {
+            width: 44px !important; height: 44px !important; line-height: 42px !important;
+            font-size: 22px !important; font-weight: 500 !important;
+            background-color: rgba(15, 23, 42, 0.9) !important; color: #e2e8f0 !important;
+            border: 1px solid rgba(51, 65, 85, 0.8) !important; border-radius: 12px !important;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3) !important; backdrop-filter: blur(4px) !important;
+            transition: all 0.15s ease !important; display: flex !important; align-items: center !important; justify-content: center !important;
+        }
+
+        /* 現在地マーカー：赤点滅（記録中） / 青点滅（停止中） */
+        .pulse-dot-red {
+            background-color: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+            animation: pulse-red 1.6s infinite cubic-bezier(0.66, 0, 1);
+        }
+        @keyframes pulse-red { to { box-shadow: 0 0 0 13px rgba(239, 68, 68, 0); } }
+
+        .pulse-dot-blue {
+            background-color: #3b82f6; box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+            animation: pulse-blue 1.6s infinite cubic-bezier(0.66, 0, 1);
+        }
+        @keyframes pulse-blue { to { box-shadow: 0 0 0 13px rgba(59, 130, 246, 0); } }
+
+        /* ゴーストマーカー：シアンパルスバブル */
+        .pulse-dot-cyan {
+            background-color: rgba(6, 182, 212, 0.95);
+            border: 2px solid #ffffff; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; font-size: 16px;
+            box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.8);
+            animation: pulse-cyan 1.5s infinite cubic-bezier(0.66, 0, 1);
+        }
+        @keyframes pulse-cyan { to { box-shadow: 0 0 0 15px rgba(6, 182, 212, 0); } }
+
+        .kml-point-label-base {
+            padding: 2px 7px !important; border-radius: 6px !important; white-space: nowrap !important;
+            font-weight: 600 !important; box-shadow: 0 3px 6px rgba(0,0,0,0.35) !important;
+            pointer-events: none !important; transition: all 0.15s ease;
+        }
+
+        input[type=range] { accent-color: #06b6d4; }
+    </style>
+</head>
+<body class="h-full bg-slate-950 text-slate-100 flex flex-col md:flex-row overflow-hidden select-none">
+
+    <!-- Sidebar (ベースアプリのレイアウトを維持) -->
+    <aside id="sidebar" class="w-full md:w-96 bg-slate-900 border-r border-slate-800 flex flex-col z-20 h-1/2 md:h-full transition-all duration-300 flex-shrink-0">
+        <!-- Header -->
+        <div class="hidden md:flex p-4 border-b border-slate-800 items-center justify-between bg-slate-900/90 backdrop-blur">
+            <div class="flex items-center space-x-2.5">
+                <div class="p-2 bg-emerald-600 rounded-xl text-white shadow-lg shadow-emerald-900/30">
+                    <i data-lucide="map-pin" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-slate-100 text-base leading-tight">GPS トラッカー</h1>
+                    <p class="text-xs text-slate-400">GPXゴースト runner & 軌跡保存</p>
+                </div>
+            </div>
+            <button id="toggle-sidebar" title="メニューを非表示" class="p-2 text-slate-300 hover:text-white rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700/60 transition active:scale-95 flex items-center gap-1 text-xs">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                <span class="text-[11px] font-medium pr-0.5">閉じる</span>
+            </button>
+        </div>
+
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-4">
+
+            <!-- 👻 ゴースト機能コントロールセクション -->
+            <div class="bg-gradient-to-br from-slate-800/90 to-cyan-950/40 rounded-2xl p-4 border border-cyan-800/40 space-y-3 shadow-lg">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                        <i data-lucide="ghost" class="w-4 h-4 text-cyan-400"></i>
+                        GPX ゴースト機能
+                    </span>
+                    <span id="ghost-status-badge" class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-slate-700 text-slate-300">
+                        未読み込み
+                    </span>
+                </div>
+
+                <!-- ファイル選択 -->
+                <div>
+                    <input type="file" id="ghost-file-input" class="hidden" accept=".gpx,.xml,text/xml">
+                    <button id="btn-select-ghost" class="w-full py-2 px-3 bg-cyan-700 hover:bg-cyan-600 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                        <i data-lucide="file-up" class="w-4 h-4"></i>
+                        ゴーストGPXデータを選択
+                    </button>
+                    <div id="ghost-file-info" class="text-[11px] text-slate-300 mt-1.5 px-1 truncate hidden">
+                        選択中: <span id="ghost-filename" class="font-bold text-cyan-300"></span>
+                    </div>
+                </div>
+
+                <!-- モード切り替え -->
+                <div class="grid grid-cols-2 gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-700/60 text-xs font-semibold text-slate-400">
+                    <button id="mode-btn-vs" class="py-1.5 rounded-lg bg-cyan-600 text-white shadow-sm transition text-center flex items-center justify-center gap-1">
+                        <i data-lucide="swords" class="w-3.5 h-3.5"></i> VS並走
+                    </button>
+                    <button id="mode-btn-replay" class="py-1.5 rounded-lg hover:text-slate-200 transition text-center flex items-center justify-center gap-1">
+                        <i data-lucide="play-circle" class="w-3.5 h-3.5"></i> リプレイ
+                    </button>
+                </div>
+            </div>
+
+            <!-- GPS Tracking Control Section (ベースアプリ) -->
+            <div class="bg-slate-800/60 rounded-2xl p-4 border border-slate-700/50 space-y-3">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i>
+                        移動軌跡トラッキング
+                    </span>
+                    <span id="tracking-badge" class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-slate-700 text-slate-300">
+                        停止中
+                    </span>
+                </div>
+
+                <!-- Auto-Follow Toggle -->
+                <div class="flex items-center justify-between p-2.5 bg-slate-900/80 rounded-xl border border-slate-700/40">
+                    <span class="text-xs text-slate-300 font-medium flex items-center gap-2">
+                        <i data-lucide="navigation" class="w-4 h-4 text-emerald-400"></i>
+                        現在地を中央に自動追従
+                    </span>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-auto-follow" class="sr-only peer" checked>
+                        <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                    </label>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="grid grid-cols-2 gap-2 text-center pt-1">
+                    <div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/40">
+                        <p class="text-[10px] text-slate-400">移動距離</p>
+                        <p id="stat-distance" class="text-base font-bold text-emerald-400">0.00 <span class="text-xs font-normal text-slate-400">km</span></p>
+                    </div>
+                    <div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/40">
+                        <p class="text-[10px] text-slate-400">現在地速度 / 最高</p>
+                        <p id="stat-speed" class="text-base font-bold text-indigo-400">0.0 <span class="text-[10px] font-normal text-slate-400">/ 0.0 km/h</span></p>
+                    </div>
+                    <div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/40">
+                        <p class="text-[10px] text-slate-400">GPS精度 / 経過時間</p>
+                        <p id="stat-accuracy" class="text-sm font-bold text-slate-200">-- <span class="text-xs font-normal text-slate-400">m</span></p>
+                    </div>
+                    <div class="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/40">
+                        <p class="text-[10px] text-slate-400">記録ポイント数</p>
+                        <p id="stat-points" class="text-base font-bold text-amber-400">0</p>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="space-y-2 pt-1">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="btn-toggle-tracking" class="py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2">
+                            <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                            <span id="btn-toggle-text">開始</span>
+                        </button>
+                        <button id="btn-pause-tracking" disabled class="py-2.5 bg-slate-700/50 text-slate-500 font-semibold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-not-allowed">
+                            <i data-lucide="pause" class="w-4 h-4"></i>
+                            <span id="btn-pause-text">一時停止</span>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="relative group">
+                            <button id="btn-export-dropdown" class="w-full py-2 bg-slate-700 hover:bg-slate-600 active:scale-[0.98] text-slate-200 text-xs font-medium rounded-xl transition flex items-center justify-center gap-1.5">
+                                <i data-lucide="download" class="w-3.5 h-3.5"></i> 軌跡出力
+                            </button>
+                            <div id="export-menu" class="hidden absolute left-0 bottom-full mb-1 w-full bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden z-30">
+                                <button id="btn-export-gpx" class="w-full text-left px-3 py-2 text-xs hover:bg-slate-700 text-slate-200 flex items-center gap-2">
+                                    <i data-lucide="file-code" class="w-3.5 h-3.5 text-emerald-400"></i> GPX 形式
+                                </button>
+                                <button id="btn-export-kml" class="w-full text-left px-3 py-2 text-xs hover:bg-slate-700 text-slate-200 flex items-center gap-2 border-t border-slate-700/50">
+                                    <i data-lucide="file-type-2" class="w-3.5 h-3.5 text-sky-400"></i> KML 形式
+                                </button>
+                            </div>
+                        </div>
+                        <button id="btn-clear-track" class="py-2 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 text-xs font-medium rounded-xl transition flex items-center justify-center gap-1.5">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> 軌跡クリア
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KML / KMZ / GPX Multi Import Section -->
+            <div class="bg-slate-800/60 rounded-2xl p-4 border border-slate-700/50 space-y-3">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <i data-lucide="file-up" class="w-4 h-4 text-sky-400"></i>
+                    地図データ / 重ね合わせ図形
+                </span>
+
+                <label id="drop-zone" for="kml-file-input" class="border-2 border-dashed border-slate-700 hover:border-sky-500/80 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition bg-slate-900/40 group">
+                    <div class="flex items-center gap-2 mb-1.5">
+                        <i data-lucide="upload-cloud" class="w-6 h-6 text-slate-500 group-hover:text-sky-400 transition"></i>
+                        <span class="text-xs text-slate-200 font-semibold">ファイルを選択 / ドロップ</span>
+                    </div>
+                    <span class="text-[10px] text-slate-400">KML, KMZ, GPXファイルに対応</span>
+                    <input type="file" id="kml-file-input" class="sr-only" multiple accept=".kml,.kmz,.gpx,.xml,application/octet-stream,text/xml,application/xml">
+                </label>
+
+                <div id="kml-layers-container" class="space-y-2 hidden">
+                    <div class="flex justify-between items-center text-xs text-slate-400 border-t border-slate-700/60 pt-2">
+                        <span>読み込み済み図形・軌跡</span>
+                        <button id="btn-clear-kml" class="text-rose-400 hover:underline text-[11px]">全削除</button>
+                    </div>
+                    <div id="kml-layers-list" class="space-y-2 max-h-56 overflow-y-auto"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer / Map Tile Controls (完全無料) -->
+        <div class="p-3 border-t border-slate-800 bg-slate-900/90 text-xs text-slate-400 flex justify-between items-center">
+            <span class="flex items-center gap-1.5">
+                <i data-lucide="layers" class="w-3.5 h-3.5"></i> 背景地図
+            </span>
+            <select id="tile-selector" class="bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-emerald-500">
+                <optgroup label="国土地理院 (完全無料・APIキー不要)">
+                    <option value="gsi-pale" selected>国土地理院 淡色地図</option>
+                    <option value="gsi-std">国土地理院 標準地図</option>
+                    <option value="gsi-photo">国土地理院 航空写真</option>
+                    <option value="gsi-blank">国土地理院 白地図</option>
+                </optgroup>
+                <optgroup label="オープン地図 / 衛星写真">
+                    <option value="osm">OpenStreetMap (標準)</option>
+                    <option value="opentopo">OpenTopoMap (地形図)</option>
+                    <option value="esri-sat">Esri World Imagery (衛星)</option>
+                </optgroup>
+            </select>
+        </div>
+
+        <!-- Version Footer -->
+        <div class="px-3 py-2 bg-slate-950/90 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500 font-mono select-none">
+            <button id="toggle-sidebar-mobile" title="メニューを非表示" class="md:hidden flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-750 active:scale-95 text-slate-200 border border-slate-700/80 rounded-xl font-sans text-xs shadow-md transition">
+                <i data-lucide="chevron-up" class="w-4 h-4 text-emerald-400"></i>
+                <span class="font-semibold">メニューを閉じる</span>
+            </button>
+            <div class="hidden md:flex items-center gap-1">
+                <i data-lucide="git-commit" class="w-3 h-3 text-slate-600"></i>
+                <span>build</span>
+            </div>
+            <span>v2026.10.08-0915</span>
+        </div>
+    </aside>
+
+    <!-- Map Container -->
+    <main class="flex-1 relative h-1/2 md:h-full w-full">
+        <div id="map" class="w-full h-full bg-slate-950"></div>
+
+        <!-- 👻 Floating VS Card (VSモード走行時オーバーレイ) -->
+        <div id="ghost-vs-card" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-[1000] w-11/12 max-w-sm bg-slate-900/90 backdrop-blur-md p-3 rounded-2xl border border-cyan-500/50 shadow-2xl space-y-1.5">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <span class="inline-block w-2.5 h-2.5 bg-cyan-400 rounded-full animate-ping"></span>
+                    <span class="text-xs font-extrabold tracking-wider text-cyan-400">VS GHOST</span>
+                </div>
+                <div id="vs-time-diff" class="text-xl font-black font-mono tracking-tight text-amber-400">+00:00</div>
+            </div>
+            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-700/60 text-xs">
+                <div>
+                    <span class="text-slate-400">距離差:</span>
+                    <span id="vs-dist-diff" class="font-bold text-slate-100 ml-1">0 m</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-slate-400">ゴースト速度:</span>
+                    <span id="vs-ghost-speed" class="font-bold text-slate-100 ml-1">0.0 km/h</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 👻 Floating Ghost Player Card (シークバー・位置調整バー) -->
+        <div id="ghost-player-card" class="hidden absolute bottom-20 left-1/2 -translate-x-1/2 z-[1000] w-11/12 max-w-md bg-slate-900/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-700/80 shadow-2xl space-y-2">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-1.5">
+                    <button id="btn-player-reset" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition flex items-center gap-1">
+                        <i data-lucide="rotate-ccw" class="w-3 h-3"></i> 最初へ
+                    </button>
+                    <button id="btn-player-play" class="w-8 h-8 bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white rounded-full flex items-center justify-center shadow-md transition">
+                        <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+                    </button>
+                    <button id="btn-player-skip-back" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono">-5s</button>
+                    <button id="btn-player-skip-forward" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono">+5s</button>
+                </div>
+                <div class="text-xs font-mono">
+                    <span id="player-cur-time" class="text-cyan-400 font-bold">00:00</span> / <span id="player-total-time" class="text-slate-400">00:00</span>
+                </div>
+            </div>
+            <div class="space-y-1">
+                <input id="ghost-seekbar" type="range" min="0" max="100" value="0" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+                <div class="flex justify-between text-[10px] text-slate-400 font-medium">
+                    <span>📍 スタート位置</span>
+                    <span>ゴースト初期位置調整</span>
+                    <span>🏁 ゴール</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Button to Reopen Sidebar -->
+        <button id="btn-show-sidebar" title="メニューを表示" class="hidden absolute top-4 left-4 z-[1000] p-2.5 sm:px-3 sm:py-2.5 bg-slate-900/95 hover:bg-slate-800 text-slate-100 rounded-xl shadow-xl border border-slate-700/80 backdrop-blur transition active:scale-95 items-center gap-2 group">
+            <i data-lucide="panel-left-open" class="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform"></i>
+            <span class="text-xs font-semibold pr-0.5">メニューを表示</span>
+        </button>
+
+        <!-- Floating Controls -->
+        <div class="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
+            <button id="btn-toggle-follow-map" title="現在地自動追従" class="p-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-lg border border-emerald-400/80 backdrop-blur transition active:scale-95 flex items-center justify-center">
+                <i data-lucide="navigation" class="w-5 h-5"></i>
+            </button>
+            <button id="btn-locate" title="現在地にジャンプ" class="p-3 bg-slate-900/90 hover:bg-slate-800 text-slate-200 rounded-xl shadow-lg border border-slate-700/80 backdrop-blur transition active:scale-95">
+                <i data-lucide="crosshair" class="w-5 h-5"></i>
+            </button>
+            <button id="btn-fit-bounds" title="全データにズーム" class="p-3 bg-slate-900/90 hover:bg-slate-800 text-slate-200 rounded-xl shadow-lg border border-slate-700/80 backdrop-blur transition active:scale-95">
+                <i data-lucide="maximize" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <!-- Toast Notifications Container -->
+        <div id="toast-container" class="absolute bottom-6 left-1/2 -translate-x-1/2 z-[2000] flex flex-col items-center gap-2 pointer-events-none"></div>
+
+        <!-- Confirm Modal -->
+        <div id="confirm-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[3000] hidden flex items-center justify-center p-4">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4">
+                <div class="flex items-center space-x-3 text-amber-400">
+                    <div class="p-2 bg-amber-500/10 rounded-xl">
+                        <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="font-bold text-slate-100 text-sm">軌跡データの消去</h3>
+                </div>
+                <p id="confirm-modal-message" class="text-xs text-slate-300 leading-relaxed">
+                    保存された移動軌跡をすべて消去してもよろしいですか？この操作は取り消せません。
+                </p>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button id="confirm-modal-cancel" class="px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 rounded-xl transition">
+                        キャンセル
+                    </button>
+                    <button id="confirm-modal-ok" class="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white rounded-xl shadow-lg transition">
+                        消去する
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        window.onload = function() {
+            lucide.createIcons();
+
+            const STORAGE_KEY_TRACK = 'gps_tracking_history_v3';
+            const DEFAULT_LAT = 37.3980;
+            const DEFAULT_LNG = 140.3880;
+            const DEFAULT_ZOOM = 13;
+
+            let trackStyle = { color: '#ef4444', weight: 10, opacity: 0.85 };
+            let trackingStatus = 'stopped';
+            let autoFollowMode = true;
+            let watchId = null;
+            let trackPoints = [];
+            let needNewSegment = false;
+            let userRealLocation = null;
+            let totalDistanceMeters = 0;
+            let maxSpeedKmh = 0;
+            let elapsedTimeSeconds = 0;
+            let timerInterval = null;
+
+            // 👻 ゴースト用状態変数
+            let ghostData = []; // [{lat, lng, t}]
+            let ghostTotalDuration = 0;
+            let ghostOffsetTime = 0;
+            let ghostMode = 'vs'; // 'vs' | 'replay'
+            let isReplaying = false;
+            let replayTimer = null;
+            let trackingStartTime = null;
+
+            let trackPolyline = null;
+            let currentPositionMarker = null;
+            let ghostMarker = null;
+            let ghostPolyline = null;
+
+            let kmlLayers = [];
+            let layerIdCounter = 1;
+
+            function showToast(message, type = 'info') {
+                const container = document.getElementById('toast-container');
+                const toast = document.createElement('div');
+                const bg = type === 'error' ? 'bg-rose-900/90 border-rose-700 text-rose-100' :
+                           type === 'success' ? 'bg-emerald-900/90 border-emerald-700 text-emerald-100' :
+                           'bg-slate-900/90 border-slate-700 text-slate-200';
+                toast.className = `${bg} px-4 py-2.5 rounded-xl border shadow-2xl backdrop-blur text-xs font-medium transition-all duration-300 opacity-0 translate-y-2 pointer-events-auto`;
+                toast.textContent = message;
+                container.appendChild(toast);
+                requestAnimationFrame(() => toast.classList.remove('opacity-0', 'translate-y-2'));
+                setTimeout(() => {
+                    toast.classList.add('opacity-0', 'translate-y-2');
+                    setTimeout(() => toast.remove(), 3500);
+                }, 3500);
+            }
+
+            // Map Setup
+            const map = L.map('map', { zoomControl: false }).setView([DEFAULT_LAT, DEFAULT_LNG], DEFAULT_ZOOM);
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+            const tileLayers = {
+                'gsi-std': L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', { attribution: '&copy; 国土地理院', maxZoom: 18 }),
+                'gsi-pale': L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { attribution: '&copy; 国土地理院', maxZoom: 18 }),
+                'gsi-photo': L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', { attribution: '&copy; 国土地理院', maxZoom: 18 }),
+                'gsi-blank': L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png', { attribution: '&copy; 国土地理院', maxZoom: 14 }),
+                'osm': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap', maxZoom: 19 }),
+                'opentopo': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenTopoMap', maxZoom: 17 }),
+                'esri-sat': L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri', maxZoom: 18 })
+            };
+
+            let activeTileLayer = tileLayers['gsi-pale'].addTo(map);
+            document.getElementById('tile-selector').addEventListener('change', (e) => {
+                if (tileLayers[e.target.value]) {
+                    map.removeLayer(activeTileLayer);
+                    activeTileLayer = tileLayers[e.target.value].addTo(map);
+                }
+            });
+
+            // ゴーストポリライン初期化
+            ghostPolyline = L.polyline([], { color: '#06b6d4', weight: 4, opacity: 0.6, dashArray: '6, 8' }).addTo(map);
+
+            loadSavedTrack();
+            refreshDeviceRealLocation(false);
+
+            function saveTrackToStorage() {
+                try {
+                    localStorage.setItem(STORAGE_KEY_TRACK, JSON.stringify({
+                        points: trackPoints, totalDistance: totalDistanceMeters, maxSpeed: maxSpeedKmh, elapsedTime: elapsedTimeSeconds
+                    }));
+                } catch (e) { console.error(e); }
+            }
+
+            function loadSavedTrack() {
+                try {
+                    const saved = localStorage.getItem(STORAGE_KEY_TRACK);
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        if (Array.isArray(parsed.points)) {
+                            trackPoints = parsed.points;
+                            totalDistanceMeters = parsed.totalDistance || 0;
+                            maxSpeedKmh = parsed.maxSpeed || 0;
+                            elapsedTimeSeconds = parsed.elapsedTime || 0;
+                            if (trackPoints.length > 0) {
+                                renderTrackOnMap();
+                                updateStatsUI();
+                                const bounds = L.latLngBounds(trackPoints.map(p => [p.lat, p.lng]));
+                                if (bounds.isValid()) map.fitBounds(bounds, { padding: [40, 40] });
+                            }
+                        }
+                    }
+                } catch (e) { console.error(e); }
+            }
+
+            function refreshDeviceRealLocation(panMap = false) {
+                if (!("geolocation" in navigator)) return;
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        const lat = pos.coords.latitude, lng = pos.coords.longitude;
+                        userRealLocation = { lat, lng };
+                        updateCurrentLocationMarker(lat, lng);
+                        if (panMap && autoFollowMode) map.panTo([lat, lng], { animate: true });
+                    },
+                    (err) => console.warn(err.message),
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+                );
+            }
+
+            function renderTrackOnMap() {
+                const segments = [];
+                let cur = [];
+                trackPoints.forEach((p) => {
+                    if (p.newSegment && cur.length > 0) { segments.push(cur); cur = []; }
+                    cur.push([p.lat, p.lng]);
+                });
+                if (cur.length > 0) segments.push(cur);
+
+                if (!trackPolyline) {
+                    trackPolyline = L.polyline(segments, { color: trackStyle.color, weight: trackStyle.weight, opacity: trackStyle.opacity, lineJoin: 'round' }).addTo(map);
+                } else {
+                    trackPolyline.setLatLngs(segments);
+                }
+
+                if (userRealLocation) updateCurrentLocationMarker(userRealLocation.lat, userRealLocation.lng);
+            }
+
+            function updateCurrentLocationMarker(lat, lng) {
+                const isTracking = (trackingStatus === 'tracking');
+                const pulseClass = isTracking ? 'pulse-dot-red' : 'pulse-dot-blue';
+
+                if (!currentPositionMarker) {
+                    const icon = L.divIcon({
+                        className: 'custom-pulse-icon',
+                        html: `<div class="w-4 h-4 rounded-full border-2 border-white ${pulseClass}"></div>`,
+                        iconSize: [16, 16], iconAnchor: [8, 8]
+                    });
+                    currentPositionMarker = L.marker([lat, lng], { icon }).addTo(map);
+                } else {
+                    currentPositionMarker.setLatLng([lat, lng]);
+                    const dot = currentPositionMarker.getElement()?.querySelector('.pulse-dot-red, .pulse-dot-blue');
+                    if (dot) dot.className = `w-4 h-4 rounded-full border-2 border-white ${pulseClass}`;
+                }
+            }
+
+            function updateStatsUI(currentSpeed = 0, currentAccuracy = null) {
+                document.getElementById('stat-distance').innerHTML = `${(totalDistanceMeters / 1000).toFixed(2)} <span class="text-xs font-normal text-slate-400">km</span>`;
+                document.getElementById('stat-points').textContent = trackPoints.length;
+                const curKmh = (currentSpeed !== null && !isNaN(currentSpeed) && currentSpeed >= 0) ? (currentSpeed * 3.6).toFixed(1) : "0.0";
+                document.getElementById('stat-speed').innerHTML = `${curKmh} <span class="text-[10px] font-normal text-slate-400">/ ${maxSpeedKmh.toFixed(1)} km/h</span>`;
+                const accStr = currentAccuracy !== null ? `${Math.round(currentAccuracy)}m` : '--';
+                document.getElementById('stat-accuracy').innerHTML = `${accStr} <span class="text-xs font-normal text-slate-400">(${formatTime(elapsedTimeSeconds)})</span>`;
+            }
+
+            function formatTime(s) {
+                const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+                return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+            }
+
+            // -----------------------------------------------------------------
+            // 👻 GPXゴースト解析 & 位置演算ロジック
+            // -----------------------------------------------------------------
+            function parseGhostGPXText(xmlText, filename) {
+                try {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(xmlText, "text/xml");
+                    let pts = doc.querySelectorAll("trkpt");
+                    if (pts.length === 0) pts = doc.querySelectorAll("rtept");
+
+                    if (pts.length < 2) {
+                        showToast("GPX内に十分な位置データが見つかりませんでした。", "error");
+                        return;
+                    }
+
+                    ghostData = [];
+                    let startTime = null;
+
+                    pts.forEach((pt, idx) => {
+                        const lat = parseFloat(pt.getAttribute("lat"));
+                        const lng = parseFloat(pt.getAttribute("lon"));
+                        const timeEl = pt.querySelector("time");
+                        let offset = idx * 2;
+
+                        if (timeEl) {
+                            const t = new Date(timeEl.textContent).getTime();
+                            if (!isNaN(t)) {
+                                if (startTime === null) startTime = t;
+                                offset = (t - startTime) / 1000;
+                            }
+                        }
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            ghostData.push({ lat, lng, t: offset });
+                        }
+                    });
+
+                    ghostTotalDuration = ghostData[ghostData.length - 1].t;
+
+                    // ガイドライン描画 & マップズーム
+                    const coords = ghostData.map(p => [p.lat, p.lng]);
+                    ghostPolyline.setLatLngs(coords);
+                    map.fitBounds(ghostPolyline.getBounds(), { padding: [40, 40] });
+
+                    // ゴーストマーカー配置
+                    if (!ghostMarker) {
+                        const ghostIcon = L.divIcon({
+                            className: 'custom-ghost-icon',
+                            html: `<div class="w-8 h-8 pulse-dot-cyan">👻</div>`,
+                            iconSize: [32, 32], iconAnchor: [16, 16]
+                        });
+                        ghostMarker = L.marker(coords[0], { icon: ghostIcon }).addTo(map);
+                    } else {
+                        ghostMarker.setLatLng(coords[0]);
+                        if (!map.hasLayer(ghostMarker)) ghostMarker.addTo(map);
+                    }
+
+                    // UI更新
+                    document.getElementById('ghost-filename').textContent = filename;
+                    document.getElementById('ghost-file-info').classList.remove('hidden');
+                    document.getElementById('ghost-status-badge').textContent = '準備完了';
+                    document.getElementById('ghost-status-badge').className = 'px-2 py-0.5 text-[10px] font-semibold rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800/60';
+                    document.getElementById('ghost-player-card').classList.remove('hidden');
+                    document.getElementById('player-total-time').textContent = formatTime(ghostTotalDuration);
+
+                    updateGhostPosition(0);
+                    showToast(`ゴースト「${filename}」を読み込みました`, "success");
+
+                } catch (err) {
+                    console.error("Ghost GPX Parse Error:", err);
+                    showToast("ゴーストデータの解析に失敗しました。", "error");
+                }
+            }
+
+            function getGhostStateAtTime(sec) {
+                if (ghostData.length === 0) return null;
+                if (sec <= 0) return { lat: ghostData[0].lat, lng: ghostData[0].lng, speed: 0 };
+                if (sec >= ghostTotalDuration) return { lat: ghostData[ghostData.length - 1].lat, lng: ghostData[ghostData.length - 1].lng, speed: 0 };
+
+                for (let i = 0; i < ghostData.length - 1; i++) {
+                    const p1 = ghostData[i], p2 = ghostData[i + 1];
+                    if (sec >= p1.t && sec <= p2.t) {
+                        const r = (sec - p1.t) / (p2.t - p1.t || 1);
+                        const lat = p1.lat + (p2.lat - p1.lat) * r;
+                        const lng = p1.lng + (p2.lng - p1.lng) * r;
+                        const dist = L.latLng(p1.lat, p1.lng).distanceTo(L.latLng(p2.lat, p2.lng));
+                        const speed = (dist / (p2.t - p1.t || 1)) * 3.6;
+                        return { lat, lng, speed };
+                    }
+                }
+                return null;
+            }
+
+            function updateGhostPosition(sec) {
+                ghostOffsetTime = Math.max(0, Math.min(sec, ghostTotalDuration));
+                const st = getGhostStateAtTime(ghostOffsetTime);
+                if (st && ghostMarker) {
+                    ghostMarker.setLatLng([st.lat, st.lng]);
+                }
+                document.getElementById('player-cur-time').textContent = formatTime(ghostOffsetTime);
+                document.getElementById('ghost-seekbar').value = (ghostOffsetTime / (ghostTotalDuration || 1)) * 100;
+            }
+
+            // ゴースト選択ボタン & 入力ハンドラ
+            document.getElementById('btn-select-ghost').addEventListener('click', () => {
+                document.getElementById('ghost-file-input').click();
+            });
+
+            document.getElementById('ghost-file-input').addEventListener('change', (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    const file = e.target.files[0];
+                    const reader = new FileReader();
+                    reader.onload = (evt) => parseGhostGPXText(evt.target.result, file.name);
+                    reader.readAsText(file);
+                }
+            });
+
+            // モード切り替え
+            const btnModeVs = document.getElementById('mode-btn-vs');
+            const btnModeReplay = document.getElementById('mode-btn-replay');
+
+            btnModeVs.addEventListener('click', () => {
+                ghostMode = 'vs';
+                btnModeVs.className = "py-1.5 rounded-lg bg-cyan-600 text-white shadow-sm transition text-center flex items-center justify-center gap-1";
+                btnModeReplay.className = "py-1.5 rounded-lg hover:text-slate-200 transition text-center flex items-center justify-center gap-1";
+                stopReplay();
+            });
+
+            btnModeReplay.addEventListener('click', () => {
+                ghostMode = 'replay';
+                btnModeReplay.className = "py-1.5 rounded-lg bg-cyan-600 text-white shadow-sm transition text-center flex items-center justify-center gap-1";
+                btnModeVs.className = "py-1.5 rounded-lg hover:text-slate-200 transition text-center flex items-center justify-center gap-1";
+                document.getElementById('ghost-vs-card').classList.add('hidden');
+            });
+
+            // ゴーストプレイヤー制御
+            document.getElementById('ghost-seekbar').addEventListener('input', (e) => {
+                if (!ghostTotalDuration) return;
+                const targetSec = (parseFloat(e.target.value) / 100) * ghostTotalDuration;
+                updateGhostPosition(targetSec);
+            });
+
+            document.getElementById('btn-player-reset').addEventListener('click', () => updateGhostPosition(0));
+            document.getElementById('btn-player-skip-back').addEventListener('click', () => updateGhostPosition(ghostOffsetTime - 5));
+            document.getElementById('btn-player-skip-forward').addEventListener('click', () => updateGhostPosition(ghostOffsetTime + 5));
+
+            document.getElementById('btn-player-play').addEventListener('click', () => {
+                if (isReplaying) stopReplay(); else startReplay();
+            });
+
+            function startReplay() {
+                if (ghostData.length === 0) return;
+                isReplaying = true;
+                document.getElementById('btn-player-play').innerHTML = `<i data-lucide="pause" class="w-4 h-4 fill-current"></i>`;
+                lucide.createIcons();
+
+                replayTimer = setInterval(() => {
+                    ghostOffsetTime += 0.5;
+                    if (ghostOffsetTime >= ghostTotalDuration) {
+                        ghostOffsetTime = ghostTotalDuration;
+                        stopReplay();
+                    }
+                    updateGhostPosition(ghostOffsetTime);
+                }, 500);
+            }
+
+            function stopReplay() {
+                isReplaying = false;
+                if (replayTimer) clearInterval(replayTimer);
+                document.getElementById('btn-player-play').innerHTML = `<i data-lucide="play" class="w-4 h-4 fill-current"></i>`;
+                lucide.createIcons();
+            }
+
+            // -----------------------------------------------------------------
+            // GPS トラッキング制御 (VSモード演算統合)
+            // -----------------------------------------------------------------
+            const btnToggle = document.getElementById('btn-toggle-tracking');
+            const btnPause = document.getElementById('btn-pause-tracking');
+            const badge = document.getElementById('tracking-badge');
+
+            btnToggle.addEventListener('click', () => {
+                if (trackingStatus === 'stopped') {
+                    if (trackPoints.length > 0) needNewSegment = true;
+                    startTracking();
+                } else {
+                    stopTracking();
+                }
+            });
+
+            btnPause.addEventListener('click', () => {
+                if (trackingStatus === 'tracking') pauseTracking();
+                else if (trackingStatus === 'paused') resumeTracking();
+            });
+
+            function startTracking() {
+                if (!("geolocation" in navigator)) {
+                    showToast("位置情報機能に対応していません。", "error");
+                    return;
+                }
+
+                trackingStatus = 'tracking';
+                trackingStartTime = Date.now();
+                updateControlButtons();
+
+                if (!timerInterval) {
+                    timerInterval = setInterval(() => {
+                        elapsedTimeSeconds++;
+                        updateStatsUI();
+                    }, 1000);
+                }
+
+                watchId = navigator.geolocation.watchPosition(
+                    (pos) => {
+                        const { latitude: lat, longitude: lng, altitude, accuracy, speed } = pos.coords;
+                        processNewLocation(lat, lng, altitude, accuracy, speed, pos.timestamp);
+                    },
+                    (err) => {
+                        showToast(`GPSエラー: ${err.message}`, "error");
+                        stopTracking();
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+
+                if (ghostData.length > 0 && ghostMode === 'vs') {
+                    document.getElementById('ghost-vs-card').classList.remove('hidden');
+                }
+                showToast("GPS トラッキングを開始しました", "success");
+            }
+
+            function processNewLocation(lat, lng, altitude, accuracy, speed, timestamp) {
+                userRealLocation = { lat, lng };
+                const curSpeedKmh = (speed && speed > 0) ? speed * 3.6 : 0;
+                if (curSpeedKmh > maxSpeedKmh) maxSpeedKmh = curSpeedKmh;
+
+                const isNewSeg = needNewSegment || (trackPoints.length === 0);
+                const newPoint = { lat, lng, altitude: altitude || 0, accuracy: accuracy || 5, speed: speed || 0, timestamp: timestamp || Date.now(), newSegment: isNewSeg };
+
+                if (trackPoints.length > 0) {
+                    const lastPt = trackPoints[trackPoints.length - 1];
+                    const dist = L.latLng(lastPt.lat, lastPt.lng).distanceTo(L.latLng(lat, lng));
+                    if (isNewSeg) {
+                        trackPoints.push(newPoint); needNewSegment = false; saveTrackToStorage();
+                    } else if (dist > 1.5) {
+                        totalDistanceMeters += dist; trackPoints.push(newPoint); saveTrackToStorage();
+                    }
+                } else {
+                    trackPoints.push(newPoint); needNewSegment = false; saveTrackToStorage();
+                    map.flyTo([lat, lng], 16, { duration: 1 });
+                }
+
+                renderTrackOnMap();
+                updateStatsUI(speed, accuracy);
+                if (autoFollowMode) map.panTo([lat, lng], { animate: true, duration: 0.5 });
+
+                // 👻 VSゴーストリアルタイム演算
+                if (ghostData.length > 0 && ghostMode === 'vs') {
+                    const elapsed = ((Date.now() - trackingStartTime) / 1000) + ghostOffsetTime;
+                    const gState = getGhostStateAtTime(elapsed);
+                    if (gState) {
+                        if (ghostMarker) ghostMarker.setLatLng([gState.lat, gState.lng]);
+                        const distDiff = L.latLng(lat, lng).distanceTo(L.latLng(gState.lat, gState.lng));
+                        
+                        document.getElementById('vs-time-diff').textContent = formatTime(elapsed);
+                        document.getElementById('vs-dist-diff').textContent = `${Math.round(distDiff)} m`;
+                        document.getElementById('vs-ghost-speed').textContent = `${gState.speed.toFixed(1)} km/h`;
+                    }
+                }
+            }
+
+            function pauseTracking() {
+                if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+                clearInterval(timerInterval); timerInterval = null;
+                trackingStatus = 'paused';
+                updateControlButtons();
+                showToast("トラッキングを一時停止しました");
+            }
+
+            function resumeTracking() { startTracking(); }
+
+            function stopTracking() {
+                if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+                clearInterval(timerInterval); timerInterval = null;
+                trackingStatus = 'stopped';
+                needNewSegment = true;
+                updateControlButtons();
+                document.getElementById('ghost-vs-card').classList.add('hidden');
+                showToast("トラッキングを停止しました");
+            }
+
+            function updateControlButtons() {
+                if (trackingStatus === 'tracking') {
+                    btnToggle.className = "py-2.5 bg-rose-600 hover:bg-rose-500 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2";
+                    document.getElementById('btn-toggle-text').textContent = "停止";
+                    btnPause.disabled = false;
+                    btnPause.className = "py-2.5 bg-amber-600 hover:bg-amber-500 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer";
+                    badge.className = "px-2 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/60";
+                    badge.textContent = "記録中";
+                } else if (trackingStatus === 'paused') {
+                    btnToggle.className = "py-2.5 bg-rose-600 hover:bg-rose-500 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2";
+                    document.getElementById('btn-toggle-text').textContent = "停止";
+                    btnPause.disabled = false;
+                    btnPause.className = "py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer";
+                    badge.className = "px-2 py-0.5 text-[10px] font-semibold rounded-full bg-amber-950 text-amber-300 border border-amber-800/60";
+                    badge.textContent = "一時停止中";
+                } else {
+                    btnToggle.className = "py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2";
+                    document.getElementById('btn-toggle-text').textContent = "開始";
+                    btnPause.disabled = true;
+                    btnPause.className = "py-2.5 bg-slate-700/50 text-slate-500 font-semibold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-not-allowed";
+                    badge.className = "px-2 py-0.5 text-[10px] font-semibold rounded-full bg-slate-700 text-slate-300";
+                    badge.textContent = "停止中";
+                }
+            }
+
+            // モーダル・ファイルエクスポート・KML読み込み機能 (ベースアプリ完全維持)
+            const confirmModal = document.getElementById('confirm-modal');
+            document.getElementById('btn-clear-track').addEventListener('click', () => {
+                document.getElementById('confirm-modal-message').textContent = "保存された移動軌跡をすべて消去してもよろしいですか？";
+                confirmModal.classList.remove('hidden');
+            });
+            document.getElementById('confirm-modal-cancel').addEventListener('click', () => confirmModal.classList.add('hidden'));
+            document.getElementById('confirm-modal-ok').addEventListener('click', () => {
+                confirmModal.classList.add('hidden');
+                trackPoints = []; totalDistanceMeters = 0; maxSpeedKmh = 0; elapsedTimeSeconds = 0;
+                localStorage.removeItem(STORAGE_KEY_TRACK);
+                if (trackPolyline) { map.removeLayer(trackPolyline); trackPolyline = null; }
+                updateStatsUI();
+                showToast("軌跡データを消去しました");
+            });
+
+            // KML/KMZ ガイドレイヤー読み込み処理
+            const kmlInput = document.getElementById('kml-file-input');
+            document.getElementById('drop-zone').addEventListener('click', () => kmlInput.click());
+            kmlInput.addEventListener('change', (e) => {
+                if (e.target.files) Array.from(e.target.files).forEach(file => processUploadedFile(file));
+            });
+
+            async function processUploadedFile(file) {
+                const name = file.name.toLowerCase();
+                if (name.endsWith('.kmz')) {
+                    const zip = await JSZip.loadAsync(file);
+                    let kmlFile = zip.file("doc.kml") || zip.file(/\.kml$/i)[0];
+                    if (kmlFile) {
+                        const text = await kmlFile.async("string");
+                        renderGeoJsonAsLayer(toGeoJSON.kml(new DOMParser().parseFromString(text, 'text/xml')), file.name);
+                    }
+                } else if (name.endsWith('.kml')) {
+                    const text = await file.text();
+                    renderGeoJsonAsLayer(toGeoJSON.kml(new DOMParser().parseFromString(text, 'text/xml')), file.name);
+                } else if (name.endsWith('.gpx')) {
+                    const text = await file.text();
+                    renderGeoJsonAsLayer(toGeoJSON.gpx(new DOMParser().parseFromString(text, 'text/xml')), file.name);
+                }
+            }
+
+            function renderGeoJsonAsLayer(geojson, filename) {
+                const layer = L.geoJSON(geojson, { style: { color: '#0ea5e9', weight: 4, opacity: 0.85 } }).addTo(map);
+                map.fitBounds(layer.getBounds());
+                showToast(`レイヤー「${filename}」を読み込みました`, "success");
+            }
+
+            // サイドバー開閉制御
+            const sidebar = document.getElementById('sidebar');
+            document.getElementById('toggle-sidebar').addEventListener('click', () => { sidebar.classList.add('hidden'); document.getElementById('btn-show-sidebar').classList.remove('hidden'); setTimeout(() => map.invalidateSize(), 300); });
+            document.getElementById('toggle-sidebar-mobile').addEventListener('click', () => { sidebar.classList.add('hidden'); document.getElementById('btn-show-sidebar').classList.remove('hidden'); setTimeout(() => map.invalidateSize(), 300); });
+            document.getElementById('btn-show-sidebar').addEventListener('click', () => { sidebar.classList.remove('hidden'); document.getElementById('btn-show-sidebar').classList.add('hidden'); setTimeout(() => map.invalidateSize(), 300); });
+        };
+    </script>
+</body>
+</html>
