@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>GPS Tracker & GPX Ghost Player v2026.10.08.2121</title>
+  <title>GPS Tracker & GPX Ghost Player v2026.10.09.0632</title>
   
   <!-- PWA Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -38,7 +38,6 @@
   <script src="https://unpkg.com/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
 
   <style>
-    /* Ensure absolute zero overflow on body */
     html, body {
       width: 100%;
       height: 100%;
@@ -54,27 +53,49 @@
       z-index: 1;
     }
 
-    /* Reposition Leaflet Zoom Controls to top-right */
-    .leaflet-top.leaflet-right {
+    /* Top Right Floating Toolbar for Controls */
+    .custom-map-controls {
+      position: absolute;
       top: 14px;
       right: 14px;
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
-    .leaflet-control-zoom {
-      border: none !important;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.5) !important;
+
+    .ctrl-btn {
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: rgba(30, 41, 59, 0.92);
+      color: #38bdf8;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+      font-size: 20px;
+      font-weight: bold;
+      transition: all 0.2s ease;
+      cursor: pointer;
     }
-    .leaflet-control-zoom a {
-      background-color: #1e293b !important;
-      color: #f8fafc !important;
-      border-color: #334155 !important;
+
+    .ctrl-btn:active {
+      transform: scale(0.92);
+      background-color: #0284c7;
+      color: #ffffff;
     }
-    
+
     /* Live GPS Position Marker Style */
     .gps-marker-container {
       display: flex;
       align-items: center;
       justify-content: center;
     }
+
     .gps-dot {
       width: 22px;
       height: 22px;
@@ -83,9 +104,11 @@
       box-shadow: 0 0 12px rgba(0,0,0,0.6);
       transition: background-color 0.3s ease;
     }
+
     .gps-dot.recording {
       animation: pulse-red 1.5s infinite;
     }
+
     .gps-dot.idle {
       background-color: #3b82f6 !important;
     }
@@ -96,7 +119,7 @@
       100% { box-shadow: 0 0 0 0 rgba(255, 45, 85, 0); }
     }
 
-    /* Ghost Marker Glow Effect */
+    /* Ghost Marker Style */
     .ghost-marker {
       font-size: 28px;
       line-height: 1;
@@ -129,9 +152,8 @@
   </style>
 </head>
 
-<body class="h-full overflow-hidden flex flex-col font-sans select-none bg-slate-950">
+<body class="h-full overflow-hidden flex flex-col font-sans select-none bg-slate-950 text-slate-100">
 
-  <!-- Top Navigation Header Bar -->
   <header class="absolute top-0 left-0 right-0 z-10 pt-safe px-4 py-3 pointer-events-none flex justify-between items-start">
     <div class="pointer-events-auto flex items-center space-x-2">
       <div class="glass-panel px-3.5 py-2 rounded-xl flex items-center gap-2 shadow-xl">
@@ -140,24 +162,33 @@
           <span class="font-bold tracking-wide text-xs sm:text-sm bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
             GPX Ghost Tracker
           </span>
-          <span class="text-[9px] font-mono text-slate-400 tracking-wider">v2026.10.08.2121</span>
+          <span class="text-[9px] font-mono text-slate-400 tracking-wider">v2026.10.09.0632</span>
         </div>
       </div>
     </div>
 
-    <!-- Right Quick Control Buttons -->
-    <div class="pointer-events-auto flex flex-col items-end gap-2 pr-12">
-      <button id="layerMenuBtn" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-slate-200 active:scale-95 transition shadow-lg" title="地図・レイヤー">
-        <i class="fa-solid fa-layer-group text-lg"></i>
-      </button>
-
+    <!-- Quick Style Button -->
+    <div class="pointer-events-auto pr-16">
       <button id="styleMenuBtn" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-sky-400 active:scale-95 transition shadow-lg" title="スタイル設定">
         <i class="fa-solid fa-palette text-lg"></i>
       </button>
     </div>
   </header>
 
-  <!-- VS Race Mode Overlay HUD -->
+  <!-- Top Map Action Controls Container (Top Right Aligned) -->
+  <div class="custom-map-controls">
+    <button id="zoomInBtn" class="ctrl-btn" title="拡大">
+      <i class="fa-solid fa-plus"></i>
+    </button>
+    <button id="zoomOutBtn" class="ctrl-btn" title="縮小">
+      <i class="fa-solid fa-minus"></i>
+    </button>
+    <button id="layerMenuBtn" class="ctrl-btn" title="地図・レイヤー">
+      <i class="fa-solid fa-map"></i>
+    </button>
+  </div>
+
+  <!-- VS Mode Real-time Statistics Banner -->
   <div id="vsOverlay" class="absolute top-16 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-md hidden pointer-events-auto">
     <div class="glass-panel rounded-2xl p-3 border border-sky-500/30 shadow-2xl flex items-center justify-between text-xs sm:text-sm">
       <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 pr-1">
@@ -179,7 +210,7 @@
     </div>
   </div>
 
-  <!-- Map Tile & Layer Selection Modal -->
+  <!-- Layer & Basemap Selection Modal -->
   <div id="layerModal" class="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
     <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[80vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
@@ -209,7 +240,7 @@
         <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-slate-600 hover:border-sky-400 bg-slate-800/40 cursor-pointer transition">
           <i class="fa-solid fa-file-circle-plus text-2xl text-sky-400 mb-1"></i>
           <span class="text-xs text-slate-300 font-medium">ログファイルを選択 (.gpx, .kml, .kmz)</span>
-          <span class="text-[10px] text-slate-500 mt-0.5">※iOS Safari完全互換 (グレーアウト防止設計)</span>
+          <span class="text-[10px] text-slate-500 mt-0.5">※iOS Safari完全互換 (全ファイル選択許可構造)</span>
           <input type="file" id="fileInput" class="hidden">
         </label>
       </div>
@@ -221,7 +252,7 @@
     </div>
   </div>
 
-  <!-- Display Style Customization Modal -->
+  <!-- Style Settings Modal -->
   <div id="styleModal" class="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
     <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[85vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
@@ -229,14 +260,14 @@
           <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
             <i class="fa-solid fa-palette text-sky-400"></i> トラック＆表示スタイル設定
           </h3>
-          <span class="text-[10px] font-mono text-slate-400">Version v2026.10.08.2121</span>
+          <span class="text-[10px] font-mono text-slate-400">Version v2026.10.09.0632</span>
         </div>
         <button id="closeStyleModal" class="text-slate-400 hover:text-white p-1">
           <i class="fa-solid fa-xmark text-lg"></i>
         </button>
       </div>
 
-      <!-- GPX Ghost Line Settings (Default: Cyan Blue #00d2ff, 10px weight) -->
+      <!-- GPX Ghost Line Settings -->
       <div class="mb-6 bg-slate-900/60 p-3.5 rounded-xl border border-sky-500/30">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -264,7 +295,7 @@
         </div>
       </div>
 
-      <!-- Live GPS Track Settings (Default: Vivid Red #ff2d55, 10px weight) -->
+      <!-- Live GPS Track Settings -->
       <div class="bg-slate-900/60 p-3.5 rounded-xl border border-rose-500/30">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -294,12 +325,10 @@
     </div>
   </div>
 
-  <!-- Main Interactive Map Container -->
   <main class="flex-1 relative w-full h-full overflow-hidden">
     <div id="map"></div>
   </main>
 
-  <!-- Bottom Footer Controls & Toolbar -->
   <footer class="absolute bottom-0 left-0 right-0 z-20 pointer-events-none pb-safe px-3 py-2 flex flex-col items-center gap-2">
     
     <!-- Ghost Replay Control Panel -->
@@ -339,13 +368,12 @@
       </div>
     </div>
 
-    <!-- Main Toolbar -->
+    <!-- Main Control Toolbar -->
     <div class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-2.5 sm:p-3 shadow-2xl flex items-center justify-between gap-2">
       
-      <!-- Auto Target Tracking Switcher (Off -> Current Location -> Ghost) -->
-      <button id="trackTargetBtn" class="px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center gap-1.5 transition active:scale-95 shrink-0" title="追尾ターゲット切り替え">
-        <i class="fa-solid fa-crosshairs text-sm"></i>
-        <span id="trackTargetLabel">🎯 追尾: 📍現在地</span>
+      <!-- Auto Target Tracking Switcher (Off -> Live Location -> Ghost) without target icon -->
+      <button id="trackTargetBtn" class="px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center transition active:scale-95 shrink-0" title="追尾ターゲット切り替え">
+        <span id="trackTargetLabel">追尾: 現在地</span>
       </button>
 
       <!-- Live GPS Recording Stats -->
@@ -374,19 +402,19 @@
     </div>
   </footer>
 
-  <!-- Notification Toast Container -->
+  <!-- Toast Notification Container -->
   <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2 rounded-xl text-xs font-semibold text-slate-100 border border-slate-700 shadow-2xl pointer-events-none opacity-0 transition-opacity duration-300">
     <span id="toastMsg">Notification</span>
   </div>
 
   <script>
-    const APP_VERSION = 'v2026.10.08.2121';
+    const APP_VERSION = 'v2026.10.09.0632';
 
     // Koriyama City Initial Coordinates
     const KORIYAMA_LAT = 37.398;
     const KORIYAMA_LNG = 140.388;
 
-    // Free Tile Maps
+    // Map Tile Services
     const TILE_MAPS = {
       gsi_pale: 'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',
       gsi_std: 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
@@ -404,21 +432,21 @@
       esri: 'Tiles © Esri'
     };
 
-    // Style Configuration Defaults
+    // Track Display Style Configurations
     const styleConfig = {
       ghost: {
-        color: '#00d2ff', // Default Blue Spectrum
-        weight: 10,       // Default 10px
+        color: '#00d2ff', // Cyan/Blue
+        weight: 10,       // 10px
         opacity: 0.85
       },
       myTrack: {
-        color: '#ff2d55', // Default Red Spectrum
-        weight: 10,       // Default 10px
+        color: '#ff2d55', // Vivid Red
+        weight: 10,       // 10px
         opacity: 0.90
       }
     };
 
-    // Tracing Target State: 'OFF' | 'MY_LOCATION' | 'GHOST'
+    // Auto Tracing Mode State: 'OFF' | 'MY_LOCATION' | 'GHOST'
     let tracingMode = 'MY_LOCATION';
 
     // Core Map Objects
@@ -441,11 +469,11 @@
     let ghostPolyline = null;
     let isGhostPlaying = false;
     let ghostCurrentTimeSec = 0;
-    let ghostTimeOffsetSec = 0; // Remembers seeker adjustment during live tracking
+    let ghostTimeOffsetSec = 0;
     let ghostAnimationTimer = null;
     let isVsModeActive = false;
 
-    // Additional GeoJSON/KML Layers
+    // Loaded KML / KMZ Layers
     let loadedLayers = [];
 
     window.addEventListener('load', () => {
@@ -455,15 +483,13 @@
     });
 
     function initMap() {
-      // Centered at Koriyama
+      // Centered at Koriyama City
       map = L.map('map', {
         zoomControl: false,
         attributionControl: false
       }).setView([KORIYAMA_LAT, KORIYAMA_LNG], 13);
 
-      L.control.zoom({ position: 'topright' }).addTo(map);
-
-      // Default Basemap: GSI Pale Tile (国土地理院 淡色)
+      // Default Basemap: GSI Pale Tile
       setBaseTile('gsi_pale');
 
       recPolyline = L.polyline([], {
@@ -482,11 +508,11 @@
       });
       userMarker = L.marker([KORIYAMA_LAT, KORIYAMA_LNG], { icon: userDotIcon }).addTo(map);
 
-      // Reset auto-center mode if user pans map manually
+      // Disable auto-tracking on manual user map drag
       map.on('dragstart', () => {
         if (tracingMode !== 'OFF') {
           setTracingMode('OFF');
-          showToast('🎯 追尾をオフにしました');
+          showToast('追尾をオフにしました');
         }
       });
     }
@@ -1020,20 +1046,33 @@
       const label = document.getElementById('trackTargetLabel');
 
       if (mode === 'MY_LOCATION') {
-        btn.className = "px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center gap-1.5 transition active:scale-95 shrink-0";
-        label.textContent = "🎯 追尾: 📍現在地";
+        btn.className = "px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center transition active:scale-95 shrink-0";
+        label.textContent = "追尾: 現在地";
         if (currentGpsLocation) map.panTo([currentGpsLocation.lat, currentGpsLocation.lng]);
       } else if (mode === 'GHOST') {
-        btn.className = "px-3 py-2 rounded-xl bg-cyan-950/80 text-cyan-300 font-bold text-xs border border-cyan-400/50 flex items-center gap-1.5 transition active:scale-95 shrink-0";
-        label.textContent = "🎯 追尾: 👻ゴースト";
+        btn.className = "px-3 py-2 rounded-xl bg-cyan-950/80 text-cyan-300 font-bold text-xs border border-cyan-400/50 flex items-center transition active:scale-95 shrink-0";
+        label.textContent = "追尾: ゴースト";
         if (ghostData && ghostMarker) map.panTo(ghostMarker.getLatLng());
       } else {
-        btn.className = "px-3 py-2 rounded-xl bg-slate-800/80 text-slate-400 font-bold text-xs border border-slate-700/80 flex items-center gap-1.5 transition active:scale-95 shrink-0";
-        label.textContent = "🎯 追尾: オフ";
+        btn.className = "px-3 py-2 rounded-xl bg-slate-800/80 text-slate-400 font-bold text-xs border border-slate-700/80 flex items-center transition active:scale-95 shrink-0";
+        label.textContent = "追尾: オフ";
       }
     }
 
     function initEventListeners() {
+      // Direct Top-Right Zoom Buttons
+      document.getElementById('zoomInBtn').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (map) map.zoomIn();
+      });
+
+      document.getElementById('zoomOutBtn').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (map) map.zoomOut();
+      });
+
       document.getElementById('mapTileSelector').addEventListener('click', (e) => {
         const btn = e.target.closest('button');
         if (btn && btn.dataset.tile) {
