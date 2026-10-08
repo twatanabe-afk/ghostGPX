@@ -36,7 +36,7 @@
         })();
     </script>
 
-    <!-- External Libraries -->
+    <!-- External Libraries (ベースアプリ構成) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
@@ -137,7 +137,7 @@
                     </span>
                 </div>
 
-                <!-- ファイル選択 (iOS対応 accept="*/*") -->
+                <!-- ファイル選択 -->
                 <div>
                     <label for="ghost-file-input" class="w-full py-2.5 px-3 bg-cyan-700 hover:bg-cyan-600 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
                         <i data-lucide="file-up" class="w-4 h-4"></i>
@@ -293,7 +293,7 @@
                 <i data-lucide="git-commit" class="w-3 h-3 text-slate-600"></i>
                 <span>build</span>
             </div>
-            <span>v2026.10.08-1510</span>
+            <span>v2026.10.08-1700</span>
         </div>
     </aside>
 
@@ -326,14 +326,14 @@
         <div id="ghost-player-card" class="hidden absolute bottom-20 left-1/2 -translate-x-1/2 z-[1000] w-11/12 max-w-md bg-slate-900/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-700/80 shadow-2xl space-y-2">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-1.5">
-                    <button id="btn-player-reset" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition flex items-center gap-1">
+                    <button id="btn-player-reset" class="px-2 py-1 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-xs font-medium transition flex items-center gap-1">
                         <i data-lucide="rotate-ccw" class="w-3 h-3"></i> 最初へ
                     </button>
                     <button id="btn-player-play" class="w-8 h-8 bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white rounded-full flex items-center justify-center shadow-md transition">
                         <i data-lucide="play" class="w-4 h-4 fill-current"></i>
                     </button>
-                    <button id="btn-player-skip-back" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono">-5s</button>
-                    <button id="btn-player-skip-forward" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-mono">+5s</button>
+                    <button id="btn-player-skip-back" class="px-2 py-1 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-xs font-mono">-5s</button>
+                    <button id="btn-player-skip-forward" class="px-2 py-1 bg-slate-800 hover:bg-slate-750 text-slate-300 rounded-lg text-xs font-mono">+5s</button>
                 </div>
                 <div class="text-xs font-mono">
                     <span id="player-cur-time" class="text-cyan-400 font-bold">00:00</span> / <span id="player-total-time" class="text-slate-400">00:00</span>
@@ -396,8 +396,33 @@
     </main>
 
     <script>
-        window.onload = function() {
-            lucide.createIcons();
+        // グローバル関数（外部コールバックで例外を出さない設計）
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            const bg = type === 'error' ? 'bg-rose-900/90 border-rose-700 text-rose-100' :
+                       type === 'success' ? 'bg-emerald-900/90 border-emerald-700 text-emerald-100' :
+                       'bg-slate-900/90 border-slate-700 text-slate-200';
+            toast.className = `${bg} px-4 py-2.5 rounded-xl border shadow-2xl backdrop-blur text-xs font-medium transition-all duration-300 opacity-0 translate-y-2 pointer-events-auto`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            requestAnimationFrame(() => toast.classList.remove('opacity-0', 'translate-y-2'));
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 3500);
+            }, 3500);
+        }
+
+        function formatTime(s) {
+            const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+            return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        }
+
+        window.addEventListener('DOMContentLoaded', function() {
+            try {
+                lucide.createIcons();
+            } catch (e) { console.error("Lucide Error:", e); }
 
             const STORAGE_KEY_TRACK = 'gps_tracking_history_v3';
             const DEFAULT_LAT = 37.3980;
@@ -416,7 +441,7 @@
             let elapsedTimeSeconds = 0;
             let timerInterval = null;
 
-            // 👻 ゴースト用変数
+            // 👻 ゴースト用
             let ghostData = [];
             let ghostTotalDuration = 0;
             let ghostOffsetTime = 0;
@@ -429,22 +454,6 @@
             let currentPositionMarker = null;
             let ghostMarker = null;
             let ghostPolyline = null;
-
-            function showToast(message, type = 'info') {
-                const container = document.getElementById('toast-container');
-                const toast = document.createElement('div');
-                const bg = type === 'error' ? 'bg-rose-900/90 border-rose-700 text-rose-100' :
-                           type === 'success' ? 'bg-emerald-900/90 border-emerald-700 text-emerald-100' :
-                           'bg-slate-900/90 border-slate-700 text-slate-200';
-                toast.className = `${bg} px-4 py-2.5 rounded-xl border shadow-2xl backdrop-blur text-xs font-medium transition-all duration-300 opacity-0 translate-y-2 pointer-events-auto`;
-                toast.textContent = message;
-                container.appendChild(toast);
-                requestAnimationFrame(() => toast.classList.remove('opacity-0', 'translate-y-2'));
-                setTimeout(() => {
-                    toast.classList.add('opacity-0', 'translate-y-2');
-                    setTimeout(() => toast.remove(), 3500);
-                }, 3500);
-            }
 
             // Map Setup
             const map = L.map('map', { zoomControl: false }).setView([DEFAULT_LAT, DEFAULT_LNG], DEFAULT_ZOOM);
@@ -468,7 +477,6 @@
                 }
             });
 
-            // ゴーストポリライン初期化
             ghostPolyline = L.polyline([], { color: '#06b6d4', weight: 4, opacity: 0.6, dashArray: '6, 8' }).addTo(map);
 
             loadSavedTrack();
@@ -562,14 +570,7 @@
                 document.getElementById('stat-accuracy').innerHTML = `${accStr} <span class="text-xs font-normal text-slate-400">(${formatTime(elapsedTimeSeconds)})</span>`;
             }
 
-            function formatTime(s) {
-                const m = Math.floor(s / 60), sec = Math.floor(s % 60);
-                return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-            }
-
-            // -----------------------------------------------------------------
-            // 👻 GPXゴースト解析 & 位置演算ロジック
-            // -----------------------------------------------------------------
+            // GPXゴースト解析 & 演算
             function parseGhostGPXText(xmlText, filename) {
                 try {
                     const parser = new DOMParser();
@@ -605,12 +606,10 @@
 
                     ghostTotalDuration = ghostData[ghostData.length - 1].t;
 
-                    // ガイドライン描画 & マップズーム
                     const coords = ghostData.map(p => [p.lat, p.lng]);
                     ghostPolyline.setLatLngs(coords);
                     map.fitBounds(ghostPolyline.getBounds(), { padding: [40, 40] });
 
-                    // ゴーストマーカー配置
                     if (!ghostMarker) {
                         const ghostIcon = L.divIcon({
                             className: 'custom-ghost-icon',
@@ -623,7 +622,6 @@
                         if (!map.hasLayer(ghostMarker)) ghostMarker.addTo(map);
                     }
 
-                    // UI更新
                     document.getElementById('ghost-filename').textContent = filename;
                     document.getElementById('ghost-file-info').classList.remove('hidden');
                     document.getElementById('ghost-status-badge').textContent = '準備完了';
@@ -669,7 +667,6 @@
                 document.getElementById('ghost-seekbar').value = (ghostOffsetTime / (ghostTotalDuration || 1)) * 100;
             }
 
-            // ゴースト選択イベントハンドラ
             document.getElementById('ghost-file-input').addEventListener('change', (e) => {
                 if (e.target.files && e.target.files[0]) {
                     const file = e.target.files[0];
@@ -679,7 +676,6 @@
                 }
             });
 
-            // モード切り替え
             const btnModeVs = document.getElementById('mode-btn-vs');
             const btnModeReplay = document.getElementById('mode-btn-replay');
 
@@ -697,7 +693,6 @@
                 document.getElementById('ghost-vs-card').classList.add('hidden');
             });
 
-            // ゴーストプレイヤー制御
             document.getElementById('ghost-seekbar').addEventListener('input', (e) => {
                 if (!ghostTotalDuration) return;
                 const targetSec = (parseFloat(e.target.value) / 100) * ghostTotalDuration;
@@ -705,4 +700,225 @@
             });
 
             document.getElementById('btn-player-reset').addEventListener('click', () => updateGhostPosition(0));
-            document.getElementById('btn
+            document.getElementById('btn-player-skip-back').addEventListener('click', () => updateGhostPosition(ghostOffsetTime - 5));
+            document.getElementById('btn-player-skip-forward').addEventListener('click', () => updateGhostPosition(ghostOffsetTime + 5));
+
+            document.getElementById('btn-player-play').addEventListener('click', () => {
+                if (isReplaying) stopReplay(); else startReplay();
+            });
+
+            function startReplay() {
+                if (ghostData.length === 0) return;
+                isReplaying = true;
+                document.getElementById('btn-player-play').innerHTML = `<i data-lucide="pause" class="w-4 h-4 fill-current"></i>`;
+                lucide.createIcons();
+
+                replayTimer = setInterval(() => {
+                    ghostOffsetTime += 0.5;
+                    if (ghostOffsetTime >= ghostTotalDuration) {
+                        ghostOffsetTime = ghostTotalDuration;
+                        stopReplay();
+                    }
+                    updateGhostPosition(ghostOffsetTime);
+                }, 500);
+            }
+
+            function stopReplay() {
+                isReplaying = false;
+                if (replayTimer) clearInterval(replayTimer);
+                document.getElementById('btn-player-play').innerHTML = `<i data-lucide="play" class="w-4 h-4 fill-current"></i>`;
+                lucide.createIcons();
+            }
+
+            // GPS トラッキング制御
+            const btnToggle = document.getElementById('btn-toggle-tracking');
+            const btnPause = document.getElementById('btn-pause-tracking');
+            const badge = document.getElementById('tracking-badge');
+
+            btnToggle.addEventListener('click', () => {
+                if (trackingStatus === 'stopped') {
+                    if (trackPoints.length > 0) needNewSegment = true;
+                    startTracking();
+                } else {
+                    stopTracking();
+                }
+            });
+
+            btnPause.addEventListener('click', () => {
+                if (trackingStatus === 'tracking') pauseTracking();
+                else if (trackingStatus === 'paused') resumeTracking();
+            });
+
+            function startTracking() {
+                if (!("geolocation" in navigator)) {
+                    showToast("位置情報機能に対応していません。", "error");
+                    return;
+                }
+
+                trackingStatus = 'tracking';
+                trackingStartTime = Date.now();
+                updateControlButtons();
+
+                if (!timerInterval) {
+                    timerInterval = setInterval(() => {
+                        elapsedTimeSeconds++;
+                        updateStatsUI();
+                    }, 1000);
+                }
+
+                watchId = navigator.geolocation.watchPosition(
+                    (pos) => {
+                        const { latitude: lat, longitude: lng, altitude, accuracy, speed } = pos.coords;
+                        processNewLocation(lat, lng, altitude, accuracy, speed, pos.timestamp);
+                    },
+                    (err) => {
+                        showToast(`GPSエラー: ${err.message}`, "error");
+                        stopTracking();
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                );
+
+                if (ghostData.length > 0 && ghostMode === 'vs') {
+                    document.getElementById('ghost-vs-card').classList.remove('hidden');
+                }
+                showToast("GPS トラッキングを開始しました", "success");
+            }
+
+            function processNewLocation(lat, lng, altitude, accuracy, speed, timestamp) {
+                userRealLocation = { lat, lng };
+                const curSpeedKmh = (speed && speed > 0) ? speed * 3.6 : 0;
+                if (curSpeedKmh > maxSpeedKmh) maxSpeedKmh = curSpeedKmh;
+
+                const isNewSeg = needNewSegment || (trackPoints.length === 0);
+                const newPoint = { lat, lng, altitude: altitude || 0, accuracy: accuracy || 5, speed: speed || 0, timestamp: timestamp || Date.now(), newSegment: isNewSeg };
+
+                if (trackPoints.length > 0) {
+                    const lastPt = trackPoints[trackPoints.length - 1];
+                    const dist = L.latLng(lastPt.lat, lastPt.lng).distanceTo(L.latLng(lat, lng));
+                    if (isNewSeg) {
+                        trackPoints.push(newPoint); needNewSegment = false; saveTrackToStorage();
+                    } else if (dist > 1.5) {
+                        totalDistanceMeters += dist; trackPoints.push(newPoint); saveTrackToStorage();
+                    }
+                } else {
+                    trackPoints.push(newPoint); needNewSegment = false; saveTrackToStorage();
+                    map.flyTo([lat, lng], 16, { duration: 1 });
+                }
+
+                renderTrackOnMap();
+                updateStatsUI(speed, accuracy);
+                if (autoFollowMode) map.panTo([lat, lng], { animate: true, duration: 0.5 });
+
+                if (ghostData.length > 0 && ghostMode === 'vs') {
+                    const elapsed = ((Date.now() - trackingStartTime) / 1000) + ghostOffsetTime;
+                    const gState = getGhostStateAtTime(elapsed);
+                    if (gState) {
+                        if (ghostMarker) ghostMarker.setLatLng([gState.lat, gState.lng]);
+                        const distDiff = L.latLng(lat, lng).distanceTo(L.latLng(gState.lat, gState.lng));
+                        
+                        document.getElementById('vs-time-diff').textContent = formatTime(elapsed);
+                        document.getElementById('vs-dist-diff').textContent = `${Math.round(distDiff)} m`;
+                        document.getElementById('vs-ghost-speed').textContent = `${gState.speed.toFixed(1)} km/h`;
+                    }
+                }
+            }
+
+            function pauseTracking() {
+                if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+                clearInterval(timerInterval); timerInterval = null;
+                trackingStatus = 'paused';
+                updateControlButtons();
+                showToast("トラッキングを一時停止しました");
+            }
+
+            function stopTracking() {
+                if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+                clearInterval(timerInterval); timerInterval = null;
+                trackingStatus = 'stopped';
+                needNewSegment = true;
+                updateControlButtons();
+                document.getElementById('ghost-vs-card').classList.add('hidden');
+                showToast("トラッキングを停止しました");
+            }
+
+            function updateControlButtons() {
+                if (trackingStatus === 'tracking') {
+                    btnToggle.className = "py-2.5 bg-rose-600 hover:bg-rose-500 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2";
+                    document.getElementById('btn-toggle-text').textContent = "停止";
+                    btnPause.disabled = false;
+                    btnPause.className = "py-2.5 bg-amber-600 hover:bg-amber-500 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer";
+                    badge.className = "px-2 py-0.5 text-[10px] font-semibold rounded-full bg-emerald-950 text-emerald-300 border border-emerald-800/60";
+                    badge.textContent = "記録中";
+                } else if (trackingStatus === 'paused') {
+                    btnToggle.className = "py-2.5 bg-rose-600 hover:bg-rose-500 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2";
+                    document.getElementById('btn-toggle-text').textContent = "停止";
+                    btnPause.disabled = false;
+                    btnPause.className = "py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2 cursor-pointer";
+                    badge.className = "px-2 py-0.5 text-[10px] font-semibold rounded-full bg-amber-950 text-amber-300 border border-amber-800/60";
+                    badge.textContent = "一時停止中";
+                } else {
+                    btnToggle.className = "py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-semibold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2";
+                    document.getElementById('btn-toggle-text').textContent = "開始";
+                    btnPause.disabled = true;
+                    btnPause.className = "py-2.5 bg-slate-700/50 text-slate-500 font-semibold text-xs rounded-xl transition flex items-center justify-center gap-2 cursor-not-allowed";
+                    badge.className = "px-2 py-0.5 text-[10px] font-semibold rounded-full bg-slate-700 text-slate-300";
+                    badge.textContent = "停止中";
+                }
+            }
+
+            // モーダル・ファイル処理
+            const confirmModal = document.getElementById('confirm-modal');
+            document.getElementById('btn-clear-track').addEventListener('click', () => {
+                document.getElementById('confirm-modal-message').textContent = "保存された移動軌跡をすべて消去してもよろしいですか？";
+                confirmModal.classList.remove('hidden');
+            });
+            document.getElementById('confirm-modal-cancel').addEventListener('click', () => confirmModal.classList.add('hidden'));
+            document.getElementById('confirm-modal-ok').addEventListener('click', () => {
+                confirmModal.classList.add('hidden');
+                trackPoints = []; totalDistanceMeters = 0; maxSpeedKmh = 0; elapsedTimeSeconds = 0;
+                localStorage.removeItem(STORAGE_KEY_TRACK);
+                if (trackPolyline) { map.removeLayer(trackPolyline); trackPolyline = null; }
+                updateStatsUI();
+                showToast("軌跡データを消去しました");
+            });
+
+            // KML/KMZ ガイドレイヤー処理
+            const kmlInput = document.getElementById('kml-file-input');
+            document.getElementById('drop-zone').addEventListener('click', () => kmlInput.click());
+            kmlInput.addEventListener('change', (e) => {
+                if (e.target.files) Array.from(e.target.files).forEach(file => processUploadedFile(file));
+            });
+
+            async function processUploadedFile(file) {
+                const name = file.name.toLowerCase();
+                if (name.endsWith('.kmz')) {
+                    const zip = await JSZip.loadAsync(file);
+                    let kmlFile = zip.file("doc.kml") || zip.file(/\.kml$/i)[0];
+                    if (kmlFile) {
+                        const text = await kmlFile.async("string");
+                        renderGeoJsonAsLayer(toGeoJSON.kml(new DOMParser().parseFromString(text, 'text/xml')), file.name);
+                    }
+                } else if (name.endsWith('.kml')) {
+                    const text = await file.text();
+                    renderGeoJsonAsLayer(toGeoJSON.kml(new DOMParser().parseFromString(text, 'text/xml')), file.name);
+                } else if (name.endsWith('.gpx')) {
+                    const text = await file.text();
+                    renderGeoJsonAsLayer(toGeoJSON.gpx(new DOMParser().parseFromString(text, 'text/xml')), file.name);
+                }
+            }
+
+            function renderGeoJsonAsLayer(geojson, filename) {
+                const layer = L.geoJSON(geojson, { style: { color: '#0ea5e9', weight: 4, opacity: 0.85 } }).addTo(map);
+                map.fitBounds(layer.getBounds());
+                showToast(`レイヤー「${filename}」を読み込みました`, "success");
+            }
+
+            // サイドバー制御
+            const sidebar = document.getElementById('sidebar');
+            document.getElementById('toggle-sidebar').addEventListener('click', () => { sidebar.classList.add('hidden'); document.getElementById('btn-show-sidebar').classList.remove('hidden'); setTimeout(() => map.invalidateSize(), 300); });
+            document.getElementById('toggle-sidebar-mobile').addEventListener('click', () => { sidebar.classList.add('hidden'); document.getElementById('btn-show-sidebar').classList.remove('hidden'); setTimeout(() => map.invalidateSize(), 300); });
+            document.getElementById('btn-show-sidebar').addEventListener('click', () => { sidebar.classList.remove('hidden'); document.getElementById('btn-show-sidebar').classList.add('hidden'); setTimeout(() => map.invalidateSize(), 300); });
+        });
+    </script>
+</body>
+</html>
