@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>GPS Tracker & GPX Ghost</title>
+  <title>GPS Tracker & GPX Ghost Player v2026.10.08.2121</title>
   
   <!-- PWA Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -11,7 +11,7 @@
   <meta name="theme-color" content="#0f172a">
   <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/854/854878.png">
 
-  <!-- Tailwind CSS -->
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -38,19 +38,30 @@
   <script src="https://unpkg.com/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
 
   <style>
-    /* Custom Map and UI Styles */
+    /* Ensure absolute zero overflow on body */
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden !important;
+      position: fixed;
+    }
+
     #map {
       width: 100%;
       height: 100%;
       z-index: 1;
     }
+
+    /* Reposition Leaflet Zoom Controls to top-right */
     .leaflet-top.leaflet-right {
-      top: 12px;
-      right: 12px;
+      top: 14px;
+      right: 14px;
     }
     .leaflet-control-zoom {
       border: none !important;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5) !important;
     }
     .leaflet-control-zoom a {
       background-color: #1e293b !important;
@@ -58,15 +69,15 @@
       border-color: #334155 !important;
     }
     
-    /* Pulsing GPS Dot Animation */
+    /* Live GPS Position Marker Style */
     .gps-marker-container {
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .gps-dot {
-      width: 18px;
-      height: 18px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
       border: 3px solid #ffffff;
       box-shadow: 0 0 12px rgba(0,0,0,0.6);
@@ -75,35 +86,36 @@
     .gps-dot.recording {
       animation: pulse-red 1.5s infinite;
     }
+    .gps-dot.idle {
+      background-color: #3b82f6 !important;
+    }
     
     @keyframes pulse-red {
       0% { box-shadow: 0 0 0 0 rgba(255, 45, 85, 0.8); }
-      70% { box-shadow: 0 0 0 14px rgba(255, 45, 85, 0); }
+      70% { box-shadow: 0 0 0 18px rgba(255, 45, 85, 0); }
       100% { box-shadow: 0 0 0 0 rgba(255, 45, 85, 0); }
     }
 
-    /* Ghost Icon Style */
+    /* Ghost Marker Glow Effect */
     .ghost-marker {
-      font-size: 26px;
+      font-size: 28px;
       line-height: 1;
       filter: drop-shadow(0 0 8px var(--ghost-glow-color, rgba(0, 210, 255, 0.9)));
       text-align: center;
       transition: transform 0.2s linear;
     }
 
-    /* Glassmorphism UI Panels */
+    /* Glassmorphism Panel Container */
     .glass-panel {
-      background: rgba(15, 23, 42, 0.88);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(15, 23, 42, 0.90);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       border: 1px solid rgba(255, 255, 255, 0.12);
     }
 
-    /* Safe Area padding for iOS Devices */
     .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
     .pt-safe { padding-top: env(safe-area-inset-top, 16px); }
 
-    /* Custom Input Range and Color styling */
     input[type=range] {
       accent-color: #00d2ff;
     }
@@ -117,52 +129,47 @@
   </style>
 </head>
 
-<body class="h-full overflow-hidden flex flex-col font-sans select-none">
+<body class="h-full overflow-hidden flex flex-col font-sans select-none bg-slate-950">
 
+  <!-- Top Navigation Header Bar -->
   <header class="absolute top-0 left-0 right-0 z-10 pt-safe px-4 py-3 pointer-events-none flex justify-between items-start">
     <div class="pointer-events-auto flex items-center space-x-2">
-      <div class="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-lg">
+      <div class="glass-panel px-3.5 py-2 rounded-xl flex items-center gap-2 shadow-xl">
         <i class="fa-solid fa-location-crosshairs text-sky-400"></i>
-        <span class="font-bold tracking-wide text-sm bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
-          GPX Ghost Tracker
-        </span>
+        <div class="flex flex-col">
+          <span class="font-bold tracking-wide text-xs sm:text-sm bg-gradient-to-r from-sky-400 to-blue-500 bg-clip-text text-transparent">
+            GPX Ghost Tracker
+          </span>
+          <span class="text-[9px] font-mono text-slate-400 tracking-wider">v2026.10.08.2121</span>
+        </div>
       </div>
     </div>
 
-    <!-- Right Quick Actions -->
-    <div class="pointer-events-auto flex flex-col items-end gap-2">
-      <!-- Layer Selector Toggle Button -->
+    <!-- Right Quick Control Buttons -->
+    <div class="pointer-events-auto flex flex-col items-end gap-2 pr-12">
       <button id="layerMenuBtn" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-slate-200 active:scale-95 transition shadow-lg" title="地図・レイヤー">
         <i class="fa-solid fa-layer-group text-lg"></i>
       </button>
 
-      <!-- Style Customization Panel Toggle Button -->
       <button id="styleMenuBtn" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-sky-400 active:scale-95 transition shadow-lg" title="スタイル設定">
         <i class="fa-solid fa-palette text-lg"></i>
-      </button>
-
-      <!-- Auto Follow Toggle -->
-      <button id="followBtn" class="glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-sky-400 active:scale-95 transition shadow-lg" title="中心追従 ON/OFF">
-        <i class="fa-solid fa-compass text-lg"></i>
       </button>
     </div>
   </header>
 
+  <!-- VS Race Mode Overlay HUD -->
   <div id="vsOverlay" class="absolute top-16 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-md hidden pointer-events-auto">
     <div class="glass-panel rounded-2xl p-3 border border-sky-500/30 shadow-2xl flex items-center justify-between text-xs sm:text-sm">
-      <!-- Time Gap -->
       <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 pr-1">
         <span class="text-slate-400 text-[10px] uppercase tracking-wider">Time Gap</span>
         <span id="vsTimeDiff" class="font-mono text-base sm:text-lg font-black text-sky-400">--:--</span>
       </div>
 
-      <!-- Distance Gap -->
       <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 px-1">
         <span class="text-slate-400 text-[10px] uppercase tracking-wider">Distance Gap</span>
         <span id="vsDistDiff" class="font-mono text-base sm:text-lg font-black text-emerald-400">0 m</span>
       </div>
 
-      <!-- Speeds comparison -->
       <div class="flex flex-col items-center flex-1 pl-1">
         <span class="text-slate-400 text-[10px] uppercase tracking-wider">Speed (You / 👻)</span>
         <div class="font-mono font-bold text-slate-200 text-xs sm:text-sm">
@@ -172,7 +179,7 @@
     </div>
   </div>
 
-  <!-- Map Layer Selection Modal -->
+  <!-- Map Tile & Layer Selection Modal -->
   <div id="layerModal" class="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
     <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[80vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
@@ -184,12 +191,11 @@
         </button>
       </div>
 
-      <!-- Map Tile Types -->
       <div class="mb-5">
         <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">ベース地図</label>
         <div class="grid grid-cols-2 gap-2 text-xs" id="mapTileSelector">
-          <button data-tile="gsi_std" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium active">国土地理院 標準</button>
-          <button data-tile="gsi_pale" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium">国土地理院 淡色</button>
+          <button data-tile="gsi_pale" class="p-2.5 rounded-xl border border-sky-500 bg-sky-950/40 text-sky-400 text-left font-medium active">国土地理院 淡色 (デフォルト)</button>
+          <button data-tile="gsi_std" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium">国土地理院 標準</button>
           <button data-tile="gsi_photo" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium">国土地理院 写真</button>
           <button data-tile="gsi_blank" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium">国土地理院 白地図</button>
           <button data-tile="osm" class="p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-left hover:border-sky-500 font-medium">OpenStreetMap</button>
@@ -198,18 +204,16 @@
         </div>
       </div>
 
-      <!-- GPX / Overlay File Import -->
       <div class="mb-4">
         <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">GPX / KML / KMZ ファイル読み込み</label>
         <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-slate-600 hover:border-sky-400 bg-slate-800/40 cursor-pointer transition">
           <i class="fa-solid fa-file-circle-plus text-2xl text-sky-400 mb-1"></i>
           <span class="text-xs text-slate-300 font-medium">ログファイルを選択 (.gpx, .kml, .kmz)</span>
-          <span class="text-[10px] text-slate-500 mt-0.5">iOS Safari対応（ファイル選択の制限解除済み）</span>
-          <input type="file" id="fileInput" accept=".gpx,.kml,.kmz,.xml,text/xml,application/gpx+xml,*/*" class="hidden">
+          <span class="text-[10px] text-slate-500 mt-0.5">※iOS Safari完全互換 (グレーアウト防止設計)</span>
+          <input type="file" id="fileInput" class="hidden">
         </label>
       </div>
 
-      <!-- Loaded Layers List -->
       <div id="loadedFilesSection" class="hidden">
         <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">読み込み済みレイヤー</span>
         <div id="layersList" class="space-y-1.5 max-h-32 overflow-y-auto text-xs"></div>
@@ -221,19 +225,22 @@
   <div id="styleModal" class="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
     <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[85vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
-        <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
-          <i class="fa-solid fa-palette text-sky-400"></i> トラック＆表示スタイル設定
-        </h3>
+        <div>
+          <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-palette text-sky-400"></i> トラック＆表示スタイル設定
+          </h3>
+          <span class="text-[10px] font-mono text-slate-400">Version v2026.10.08.2121</span>
+        </div>
         <button id="closeStyleModal" class="text-slate-400 hover:text-white p-1">
           <i class="fa-solid fa-xmark text-lg"></i>
         </button>
       </div>
 
-      <!-- GPX Ghost Style Section (Default: Blue spectrum) -->
+      <!-- GPX Ghost Line Settings (Default: Cyan Blue #00d2ff, 10px weight) -->
       <div class="mb-6 bg-slate-900/60 p-3.5 rounded-xl border border-sky-500/30">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-            <span>👻</span> GPXゴースト表示 (デフォルト: 青系)
+            <span>👻</span> GPXゴースト軌跡 (デフォルト: 青系, 10px)
           </span>
           <input type="color" id="ghostColorPicker" value="#00d2ff" class="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0">
         </div>
@@ -242,26 +249,26 @@
           <div>
             <div class="flex justify-between text-slate-400 mb-1">
               <span>線の太さ (Weight)</span>
-              <span id="ghostWeightVal" class="font-mono text-slate-200">5 px</span>
+              <span id="ghostWeightVal" class="font-mono text-slate-200">10 px</span>
             </div>
-            <input type="range" id="ghostWeightSlider" min="1" max="10" value="5" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+            <input type="range" id="ghostWeightSlider" min="1" max="20" value="10" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
           </div>
 
           <div>
             <div class="flex justify-between text-slate-400 mb-1">
               <span>不透明度 (Opacity)</span>
-              <span id="ghostOpacityVal" class="font-mono text-slate-200">80 %</span>
+              <span id="ghostOpacityVal" class="font-mono text-slate-200">85 %</span>
             </div>
-            <input type="range" id="ghostOpacitySlider" min="10" max="100" value="80" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+            <input type="range" id="ghostOpacitySlider" min="10" max="100" value="85" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
           </div>
         </div>
       </div>
 
-      <!-- Current Location & Live Track Style Section (Default: Red spectrum) -->
+      <!-- Live GPS Track Settings (Default: Vivid Red #ff2d55, 10px weight) -->
       <div class="bg-slate-900/60 p-3.5 rounded-xl border border-rose-500/30">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
-            <i class="fa-solid fa-location-dot"></i> 現在地＆走行ログ (デフォルト: 赤系)
+            <i class="fa-solid fa-location-dot"></i> 現在地＆走行ログ (デフォルト: 赤系, 10px)
           </span>
           <input type="color" id="myColorPicker" value="#ff2d55" class="w-8 h-8 rounded-lg cursor-pointer bg-transparent border-0">
         </div>
@@ -270,9 +277,9 @@
           <div>
             <div class="flex justify-between text-slate-400 mb-1">
               <span>線の太さ (Weight)</span>
-              <span id="myWeightVal" class="font-mono text-slate-200">5 px</span>
+              <span id="myWeightVal" class="font-mono text-slate-200">10 px</span>
             </div>
-            <input type="range" id="myWeightSlider" min="1" max="10" value="5" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
+            <input type="range" id="myWeightSlider" min="1" max="20" value="10" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
           </div>
 
           <div>
@@ -287,10 +294,12 @@
     </div>
   </div>
 
-  <main class="flex-1 relative w-full h-full">
+  <!-- Main Interactive Map Container -->
+  <main class="flex-1 relative w-full h-full overflow-hidden">
     <div id="map"></div>
   </main>
 
+  <!-- Bottom Footer Controls & Toolbar -->
   <footer class="absolute bottom-0 left-0 right-0 z-20 pointer-events-none pb-safe px-3 py-2 flex flex-col items-center gap-2">
     
     <!-- Ghost Replay Control Panel -->
@@ -305,12 +314,10 @@
         </div>
       </div>
 
-      <!-- Seek Bar Slider -->
       <div class="px-1 mb-2">
         <input type="range" id="ghostSeekBar" min="0" max="100" value="0" step="0.1" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
       </div>
 
-      <!-- Control Buttons -->
       <div class="flex items-center justify-center gap-4 text-slate-200">
         <button id="ghostResetBtn" class="p-1.5 text-slate-400 hover:text-sky-400 transition" title="最初に戻る">
           <i class="fa-solid fa-backward-step text-base"></i>
@@ -332,31 +339,36 @@
       </div>
     </div>
 
-    <!-- Main Live GPS Tracker Control Toolbar -->
-    <div class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-2">
-      <!-- Live Stats Display -->
-      <div class="flex items-center gap-3 pl-2">
+    <!-- Main Toolbar -->
+    <div class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-2.5 sm:p-3 shadow-2xl flex items-center justify-between gap-2">
+      
+      <!-- Auto Target Tracking Switcher (Off -> Current Location -> Ghost) -->
+      <button id="trackTargetBtn" class="px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center gap-1.5 transition active:scale-95 shrink-0" title="追尾ターゲット切り替え">
+        <i class="fa-solid fa-crosshairs text-sm"></i>
+        <span id="trackTargetLabel">🎯 追尾: 📍現在地</span>
+      </button>
+
+      <!-- Live GPS Recording Stats -->
+      <div class="flex items-center gap-2.5">
         <div class="flex flex-col">
-          <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">記録時間</span>
-          <span id="recTime" class="font-mono text-base font-black text-slate-100">00:00:00</span>
+          <span class="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">記録時間</span>
+          <span id="recTime" class="font-mono text-xs sm:text-sm font-black text-slate-100">00:00:00</span>
         </div>
-        <div class="h-6 w-px bg-slate-700/80"></div>
+        <div class="h-5 w-px bg-slate-700/80"></div>
         <div class="flex flex-col">
-          <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">走行距離</span>
-          <span id="recDist" class="font-mono text-base font-black text-emerald-400">0.00 <span class="text-[10px] font-normal text-slate-400">km</span></span>
+          <span class="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">走行距離</span>
+          <span id="recDist" class="font-mono text-xs sm:text-sm font-black text-emerald-400">0.00 <span class="text-[9px] font-normal text-slate-400">km</span></span>
         </div>
       </div>
 
       <!-- Action Buttons -->
-      <div class="flex items-center gap-2">
-        <!-- Start / Stop GPS Recording -->
-        <button id="recToggleBtn" class="px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition active:scale-95">
+      <div class="flex items-center gap-1.5">
+        <button id="recToggleBtn" class="px-3 py-2 rounded-xl font-bold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition active:scale-95">
           <i class="fa-solid fa-play text-xs"></i> <span>記録開始</span>
         </button>
 
-        <!-- Export GPX Button -->
-        <button id="exportGpxBtn" class="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center border border-slate-700 transition active:scale-95 disabled:opacity-40" disabled title="GPXエクスポート">
-          <i class="fa-solid fa-download text-sm"></i>
+        <button id="exportGpxBtn" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center border border-slate-700 transition active:scale-95 disabled:opacity-40" disabled title="GPXエクスポート">
+          <i class="fa-solid fa-download text-xs sm:text-sm"></i>
         </button>
       </div>
     </div>
@@ -368,12 +380,16 @@
   </div>
 
   <script>
+    const APP_VERSION = 'v2026.10.08.2121';
+
+    // Koriyama City Initial Coordinates
     const KORIYAMA_LAT = 37.398;
     const KORIYAMA_LNG = 140.388;
 
+    // Free Tile Maps
     const TILE_MAPS = {
-      gsi_std: 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
       gsi_pale: 'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',
+      gsi_std: 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
       gsi_photo: 'https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg',
       gsi_blank: 'https://cyberjapandata.gsi.go.jp/xyz/blank/{z}/{x}/{y}.png',
       osm: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -388,27 +404,29 @@
       esri: 'Tiles © Esri'
     };
 
-    // Custom Style Configuration (Blue Ghost / Red GPS Defaults)
+    // Style Configuration Defaults
     const styleConfig = {
       ghost: {
-        color: '#00d2ff',
-        weight: 5,
-        opacity: 0.8
+        color: '#00d2ff', // Default Blue Spectrum
+        weight: 10,       // Default 10px
+        opacity: 0.85
       },
       myTrack: {
-        color: '#ff2d55',
-        weight: 5,
-        opacity: 0.9
+        color: '#ff2d55', // Default Red Spectrum
+        weight: 10,       // Default 10px
+        opacity: 0.90
       }
     };
 
-    // App core variables
+    // Tracing Target State: 'OFF' | 'MY_LOCATION' | 'GHOST'
+    let tracingMode = 'MY_LOCATION';
+
+    // Core Map Objects
     let map = null;
     let currentTileLayer = null;
     let watchPositionId = null;
-    let autoFollow = true;
 
-    // GPS Recording state
+    // Live GPS Recording State
     let isRecording = false;
     let recStartTime = 0;
     let recTimerInterval = null;
@@ -417,16 +435,17 @@
     let recPolyline = null;
     let userMarker = null;
 
-    // Ghost Engine state
+    // Ghost Engine State
     let ghostData = null;
     let ghostMarker = null;
     let ghostPolyline = null;
     let isGhostPlaying = false;
     let ghostCurrentTimeSec = 0;
+    let ghostTimeOffsetSec = 0; // Remembers seeker adjustment during live tracking
     let ghostAnimationTimer = null;
     let isVsModeActive = false;
 
-    // Additional Layer overlays
+    // Additional GeoJSON/KML Layers
     let loadedLayers = [];
 
     window.addEventListener('load', () => {
@@ -436,19 +455,17 @@
     });
 
     function initMap() {
-      // Initial location set to Koriyama City, Fukushima
+      // Centered at Koriyama
       map = L.map('map', {
         zoomControl: false,
         attributionControl: false
       }).setView([KORIYAMA_LAT, KORIYAMA_LNG], 13);
 
-      // Add Zoom Control to Top Right
       L.control.zoom({ position: 'topright' }).addTo(map);
 
-      // Set default base tile layer
-      setBaseTile('gsi_std');
+      // Default Basemap: GSI Pale Tile (国土地理院 淡色)
+      setBaseTile('gsi_pale');
 
-      // Live GPS Track Polyline (Configurable Red default)
       recPolyline = L.polyline([], {
         color: styleConfig.myTrack.color,
         weight: styleConfig.myTrack.weight,
@@ -457,20 +474,27 @@
         lineJoin: 'round'
       }).addTo(map);
 
-      // User Position Marker
       const userDotIcon = L.divIcon({
         className: 'gps-marker-container',
         html: `<div id="gpsDotEl" class="gps-dot idle" style="background-color: ${styleConfig.myTrack.color}; border-color: #ffffff;"></div>`,
-        iconSize: [20, 20],
-        iconAnchor: [10, 10]
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
       });
       userMarker = L.marker([KORIYAMA_LAT, KORIYAMA_LNG], { icon: userDotIcon }).addTo(map);
+
+      // Reset auto-center mode if user pans map manually
+      map.on('dragstart', () => {
+        if (tracingMode !== 'OFF') {
+          setTracingMode('OFF');
+          showToast('🎯 追尾をオフにしました');
+        }
+      });
     }
 
     function setBaseTile(type) {
       if (currentTileLayer) map.removeLayer(currentTileLayer);
 
-      const url = TILE_MAPS[type] || TILE_MAPS.gsi_std;
+      const url = TILE_MAPS[type] || TILE_MAPS.gsi_pale;
       let attr = ATTRIBUTIONS.gsi;
       if (type === 'osm') attr = ATTRIBUTIONS.osm;
       if (type === 'opentopo') attr = ATTRIBUTIONS.opentopo;
@@ -481,7 +505,6 @@
         attribution: attr
       }).addTo(map);
 
-      // Update button visual active state
       document.querySelectorAll('#mapTileSelector button').forEach(btn => {
         if (btn.dataset.tile === type) {
           btn.classList.add('border-sky-500', 'bg-sky-950/40', 'text-sky-400');
@@ -495,7 +518,7 @@
 
     function startGpsTracking() {
       if (!('geolocation' in navigator)) {
-        showToast('⚠️ お使いのブラウザはGPSをサポートしていません');
+        showToast('⚠️ GPS機能がブラウザで無効です');
         return;
       }
 
@@ -518,7 +541,7 @@
       const latLng = [latitude, longitude];
       userMarker.setLatLng(latLng);
 
-      if (autoFollow) {
+      if (tracingMode === 'MY_LOCATION') {
         map.panTo(latLng, { animate: true });
       }
 
@@ -527,7 +550,7 @@
         recPolyline.addLatLng(latLng);
 
         const totalDistMeters = calculateTrackDistance(recordedPoints);
-        document.getElementById('recDist').innerHTML = `${(totalDistMeters / 1000).toFixed(2)} <span class="text-[10px] font-normal text-slate-400">km</span>`;
+        document.getElementById('recDist').innerHTML = `${(totalDistMeters / 1000).toFixed(2)} <span class="text-[9px] font-normal text-slate-400">km</span>`;
 
         if (ghostData && isVsModeActive) {
           updateVsModeStats(currentGpsLocation);
@@ -536,25 +559,28 @@
     }
 
     function handleGpsError(err) {
-      console.warn('GPS Warning:', err);
+      console.warn('GPS Notice:', err);
     }
 
     function toggleRecording() {
       if (!isRecording) {
-        // Start Live Recording
         isRecording = true;
         recordedPoints = [];
         recPolyline.setLatLngs([]);
         recStartTime = Date.now();
+        ghostTimeOffsetSec = 0;
 
-        document.getElementById('recToggleBtn').className = "px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-rose-500 hover:bg-rose-400 text-white shadow-lg shadow-rose-500/20 flex items-center gap-1.5 transition active:scale-95";
+        document.getElementById('recToggleBtn').className = "px-3 py-2 rounded-xl font-bold text-xs sm:text-sm bg-rose-500 hover:bg-rose-400 text-white shadow-lg shadow-rose-500/20 flex items-center gap-1.5 transition active:scale-95";
         document.getElementById('recToggleBtn').innerHTML = `<i class="fa-solid fa-square text-xs"></i> <span>記録停止</span>`;
-        document.getElementById('gpsDotEl').className = "gps-dot recording";
+        
+        const dotEl = document.getElementById('gpsDotEl');
+        dotEl.className = "gps-dot recording";
+        dotEl.style.backgroundColor = styleConfig.myTrack.color;
+
         document.getElementById('exportGpxBtn').disabled = true;
 
         recTimerInterval = setInterval(updateRecTimer, 1000);
 
-        // Synchronize VS Ghost Mode
         if (ghostData) {
           pauseGhostReplay();
           isVsModeActive = true;
@@ -567,13 +593,15 @@
         }
 
       } else {
-        // Stop Recording
         isRecording = false;
         clearInterval(recTimerInterval);
 
-        document.getElementById('recToggleBtn').className = "px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition active:scale-95";
+        document.getElementById('recToggleBtn').className = "px-3 py-2 rounded-xl font-bold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition active:scale-95";
         document.getElementById('recToggleBtn').innerHTML = `<i class="fa-solid fa-play text-xs"></i> <span>記録開始</span>`;
-        document.getElementById('gpsDotEl').className = "gps-dot idle";
+        
+        const dotEl = document.getElementById('gpsDotEl');
+        dotEl.className = "gps-dot idle";
+        dotEl.style.backgroundColor = styleConfig.myTrack.color;
 
         if (recordedPoints.length > 0) {
           document.getElementById('exportGpxBtn').disabled = false;
@@ -590,25 +618,21 @@
 
     function updateRecTimer() {
       const elapsedMs = Date.now() - recStartTime;
-      document.getElementById('recTime').textContent = formatSeconds(Math.floor(elapsedMs / 1000), true);
+      const elapsedSec = elapsedMs / 1000;
+      document.getElementById('recTime').textContent = formatSeconds(Math.floor(elapsedSec), true);
 
       if (isVsModeActive && ghostData) {
-        ghostCurrentTimeSec = elapsedMs / 1000;
-        if (ghostCurrentTimeSec <= ghostData.totalDurationSec) {
-          updateGhostMarkerPosition(ghostCurrentTimeSec);
-          document.getElementById('ghostSeekBar').value = (ghostCurrentTimeSec / ghostData.totalDurationSec) * 100;
-          document.getElementById('ghostCurrentTime').textContent = formatSeconds(ghostCurrentTimeSec);
-        }
-      }
-    }
+        ghostCurrentTimeSec = elapsedSec + ghostTimeOffsetSec;
 
-    function loadGhostFile(file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target.result;
-        parseAndSetGhost(content, file.name);
-      };
-      reader.readAsText(file);
+        if (ghostCurrentTimeSec < 0) ghostCurrentTimeSec = 0;
+        if (ghostCurrentTimeSec > ghostData.totalDurationSec) {
+          ghostCurrentTimeSec = ghostData.totalDurationSec;
+        }
+
+        updateGhostMarkerPosition(ghostCurrentTimeSec);
+        document.getElementById('ghostSeekBar').value = (ghostCurrentTimeSec / ghostData.totalDurationSec) * 100;
+        document.getElementById('ghostCurrentTime').textContent = formatSeconds(ghostCurrentTimeSec);
+      }
     }
 
     function parseAndSetGhost(xmlText, fileName) {
@@ -617,7 +641,7 @@
       const trkptNodes = xmlDoc.querySelectorAll('trkpt');
 
       if (trkptNodes.length < 2) {
-        showToast('⚠️ GPXファイルにタイムスタンプ付トラックデータが見つかりません');
+        showToast('⚠️ GPXファイルにタイムスタンプ付データが見つかりません');
         return;
       }
 
@@ -641,7 +665,6 @@
         }
       });
 
-      // Calculate instantaneous speeds
       for (let i = 0; i < parsedPoints.length; i++) {
         if (i === 0) {
           parsedPoints[i].speed = 0;
@@ -658,17 +681,15 @@
 
       clearGhostData();
 
-      // Render Ghost Polyline using configured Blue default style
       const latLngs = parsedPoints.map(p => [p.lat, p.lng]);
       ghostPolyline = L.polyline(latLngs, {
         color: styleConfig.ghost.color,
         weight: styleConfig.ghost.weight,
         opacity: styleConfig.ghost.opacity,
-        dashArray: '6, 8',
+        dashArray: '8, 10',
         lineCap: 'round'
       }).addTo(map);
 
-      // Render Ghost Marker
       const ghostIcon = L.divIcon({
         className: 'ghost-marker',
         html: `👻`,
@@ -719,12 +740,16 @@
       const state = getGhostStateAtTime(timeSec);
       if (state && ghostMarker) {
         ghostMarker.setLatLng([state.lat, state.lng]);
+
+        if (tracingMode === 'GHOST') {
+          map.panTo([state.lat, state.lng], { animate: true });
+        }
       }
     }
 
     function toggleGhostPlayPause() {
       if (isRecording) {
-        showToast('⚠️ 記録(VSモード)中は手動再生操作が制限されます');
+        showToast('ℹ️ 記録(VSモード)中は現在地に連動して進行します');
         return;
       }
 
@@ -770,6 +795,21 @@
       document.getElementById('ghostPlayIcon').className = "fa-solid fa-play text-base ml-0.5";
     }
 
+    function setGhostTimeExplicitly(targetTimeSec) {
+      ghostCurrentTimeSec = Math.max(0, Math.min(ghostData ? ghostData.totalDurationSec : 0, targetTimeSec));
+
+      if (isRecording) {
+        const currentElapsedSec = (Date.now() - recStartTime) / 1000;
+        ghostTimeOffsetSec = ghostCurrentTimeSec - currentElapsedSec;
+      }
+
+      updateGhostMarkerPosition(ghostCurrentTimeSec);
+      if (ghostData) {
+        document.getElementById('ghostSeekBar').value = (ghostCurrentTimeSec / ghostData.totalDurationSec) * 100;
+      }
+      document.getElementById('ghostCurrentTime').textContent = formatSeconds(ghostCurrentTimeSec);
+    }
+
     function clearGhostData() {
       pauseGhostReplay();
       if (ghostPolyline) map.removeLayer(ghostPolyline);
@@ -779,9 +819,14 @@
       ghostPolyline = null;
       ghostMarker = null;
       ghostCurrentTimeSec = 0;
+      ghostTimeOffsetSec = 0;
 
       document.getElementById('ghostPlayerPanel').classList.add('hidden');
       document.getElementById('vsOverlay').classList.add('hidden');
+
+      if (tracingMode === 'GHOST') {
+        setTracingMode('MY_LOCATION');
+      }
     }
 
     function updateVsModeStats(myGps) {
@@ -820,10 +865,19 @@
       if (!file) return;
 
       const ext = file.name.split('.').pop().toLowerCase();
+      const allowedExts = ['gpx', 'kml', 'kmz', 'xml'];
+
+      if (!allowedExts.includes(ext)) {
+        alert(`❌ 未対応のファイル形式です (.${ext})\n\n対応形式: .gpx, .kml, .kmz`);
+        e.target.value = '';
+        return;
+      }
 
       try {
         if (ext === 'gpx') {
-          loadGhostFile(file);
+          const reader = new FileReader();
+          reader.onload = (evt) => parseAndSetGhost(evt.target.result, file.name);
+          reader.readAsText(file);
         } else if (ext === 'kmz') {
           const zip = await JSZip.loadAsync(file);
           const kmlFile = Object.keys(zip.files).find(name => name.endsWith('.kml'));
@@ -898,7 +952,7 @@
       if (recordedPoints.length === 0) return;
 
       let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-      gpx += `<gpx version="1.1" creator="GPX Ghost Tracker" xmlns="http://www.topografix.com/GPX/1/1">\n`;
+      gpx += `<gpx version="1.1" creator="GPX Ghost Tracker ${APP_VERSION}" xmlns="http://www.topografix.com/GPX/1/1">\n`;
       gpx += `  <trk>\n    <name>Track_${new Date().toISOString()}</name>\n    <trkseg>\n`;
 
       recordedPoints.forEach(pt => {
@@ -922,7 +976,6 @@
     }
 
     function applyStyleUpdates() {
-      // Update Ghost track style
       if (ghostPolyline) {
         ghostPolyline.setStyle({
           color: styleConfig.ghost.color,
@@ -931,10 +984,8 @@
         });
       }
 
-      // Update Ghost glow color
       document.documentElement.style.setProperty('--ghost-glow-color', styleConfig.ghost.color);
 
-      // Update Live Track style
       if (recPolyline) {
         recPolyline.setStyle({
           color: styleConfig.myTrack.color,
@@ -943,15 +994,46 @@
         });
       }
 
-      // Update GPS dot color
       const dotEl = document.getElementById('gpsDotEl');
       if (dotEl) {
         dotEl.style.backgroundColor = styleConfig.myTrack.color;
       }
     }
 
+    function cycleTracingMode() {
+      if (tracingMode === 'OFF') {
+        setTracingMode('MY_LOCATION');
+      } else if (tracingMode === 'MY_LOCATION') {
+        if (ghostData && ghostMarker) {
+          setTracingMode('GHOST');
+        } else {
+          setTracingMode('OFF');
+        }
+      } else {
+        setTracingMode('OFF');
+      }
+    }
+
+    function setTracingMode(mode) {
+      tracingMode = mode;
+      const btn = document.getElementById('trackTargetBtn');
+      const label = document.getElementById('trackTargetLabel');
+
+      if (mode === 'MY_LOCATION') {
+        btn.className = "px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center gap-1.5 transition active:scale-95 shrink-0";
+        label.textContent = "🎯 追尾: 📍現在地";
+        if (currentGpsLocation) map.panTo([currentGpsLocation.lat, currentGpsLocation.lng]);
+      } else if (mode === 'GHOST') {
+        btn.className = "px-3 py-2 rounded-xl bg-cyan-950/80 text-cyan-300 font-bold text-xs border border-cyan-400/50 flex items-center gap-1.5 transition active:scale-95 shrink-0";
+        label.textContent = "🎯 追尾: 👻ゴースト";
+        if (ghostData && ghostMarker) map.panTo(ghostMarker.getLatLng());
+      } else {
+        btn.className = "px-3 py-2 rounded-xl bg-slate-800/80 text-slate-400 font-bold text-xs border border-slate-700/80 flex items-center gap-1.5 transition active:scale-95 shrink-0";
+        label.textContent = "🎯 追尾: オフ";
+      }
+    }
+
     function initEventListeners() {
-      // Map base tile selector
       document.getElementById('mapTileSelector').addEventListener('click', (e) => {
         const btn = e.target.closest('button');
         if (btn && btn.dataset.tile) {
@@ -959,7 +1041,6 @@
         }
       });
 
-      // Modals
       document.getElementById('layerMenuBtn').addEventListener('click', () => {
         document.getElementById('layerModal').classList.remove('hidden');
       });
@@ -974,59 +1055,24 @@
         document.getElementById('styleModal').classList.add('hidden');
       });
 
-      // File Input
       document.getElementById('fileInput').addEventListener('change', handleFileSelect);
-
-      // Follow toggle
-      document.getElementById('followBtn').addEventListener('click', () => {
-        autoFollow = !autoFollow;
-        const btn = document.getElementById('followBtn');
-        if (autoFollow) {
-          btn.className = "glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-sky-400 active:scale-95 transition shadow-lg";
-          if (currentGpsLocation) map.panTo([currentGpsLocation.lat, currentGpsLocation.lng]);
-          showToast('🎯 自動中央追従: ON');
-        } else {
-          btn.className = "glass-panel w-10 h-10 rounded-xl flex items-center justify-center text-slate-400 active:scale-95 transition shadow-lg";
-          showToast('🎯 自動中央追従: OFF');
-        }
-      });
-
-      // Recording toggle
+      document.getElementById('trackTargetBtn').addEventListener('click', cycleTracingMode);
       document.getElementById('recToggleBtn').addEventListener('click', toggleRecording);
       document.getElementById('exportGpxBtn').addEventListener('click', exportGpx);
 
-      // Ghost Player controls
       document.getElementById('ghostPlayPauseBtn').addEventListener('click', toggleGhostPlayPause);
-      document.getElementById('ghostResetBtn').addEventListener('click', () => {
-        ghostCurrentTimeSec = 0;
-        updateGhostMarkerPosition(0);
-        document.getElementById('ghostSeekBar').value = 0;
-        document.getElementById('ghostCurrentTime').textContent = "00:00";
-      });
-      document.getElementById('ghostRewindBtn').addEventListener('click', () => {
-        ghostCurrentTimeSec = Math.max(0, ghostCurrentTimeSec - 5);
-        updateGhostMarkerPosition(ghostCurrentTimeSec);
-        document.getElementById('ghostSeekBar').value = (ghostCurrentTimeSec / ghostData.totalDurationSec) * 100;
-        document.getElementById('ghostCurrentTime').textContent = formatSeconds(ghostCurrentTimeSec);
-      });
-      document.getElementById('ghostForwardBtn').addEventListener('click', () => {
-        ghostCurrentTimeSec = Math.min(ghostData.totalDurationSec, ghostCurrentTimeSec + 5);
-        updateGhostMarkerPosition(ghostCurrentTimeSec);
-        document.getElementById('ghostSeekBar').value = (ghostCurrentTimeSec / ghostData.totalDurationSec) * 100;
-        document.getElementById('ghostCurrentTime').textContent = formatSeconds(ghostCurrentTimeSec);
-      });
+      document.getElementById('ghostResetBtn').addEventListener('click', () => setGhostTimeExplicitly(0));
+      document.getElementById('ghostRewindBtn').addEventListener('click', () => setGhostTimeExplicitly(ghostCurrentTimeSec - 5));
+      document.getElementById('ghostForwardBtn').addEventListener('click', () => setGhostTimeExplicitly(ghostCurrentTimeSec + 5));
       document.getElementById('ghostClearBtn').addEventListener('click', clearGhostData);
 
       document.getElementById('ghostSeekBar').addEventListener('input', (e) => {
         if (!ghostData) return;
         const pct = parseFloat(e.target.value);
-        ghostCurrentTimeSec = (pct / 100) * ghostData.totalDurationSec;
-        updateGhostMarkerPosition(ghostCurrentTimeSec);
-        document.getElementById('ghostCurrentTime').textContent = formatSeconds(ghostCurrentTimeSec);
+        const targetSec = (pct / 100) * ghostData.totalDurationSec;
+        setGhostTimeExplicitly(targetSec);
       });
 
-      // Realtime Style Controls Listeners
-      // Ghost Style
       document.getElementById('ghostColorPicker').addEventListener('input', (e) => {
         styleConfig.ghost.color = e.target.value;
         applyStyleUpdates();
@@ -1042,7 +1088,6 @@
         applyStyleUpdates();
       });
 
-      // Live GPS Track Style
       document.getElementById('myColorPicker').addEventListener('input', (e) => {
         styleConfig.myTrack.color = e.target.value;
         applyStyleUpdates();
