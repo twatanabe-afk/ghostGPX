@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>GPS Tracker & GPX Ghost Player v2026.10.09.1209</title>
-  
+  <title>GPS Tracker & GPX Ghost Player v2026.10.09.1230</title>
+
   <!-- PWA & Mobile Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -54,7 +54,7 @@
       z-index: 1;
     }
 
-    /* Top Right Control Toolbar positioned cleanly below HUD at top: 92px */
+    /* Top Right Control Toolbar starting safely below HUD at top: 92px */
     .custom-map-controls {
       position: absolute;
       top: 92px;
@@ -92,7 +92,7 @@
       color: #ffffff;
     }
 
-    /* GPS Live Marker Animations */
+    /* GPS Live Dot Pulse Animations */
     .gps-marker-container {
       display: flex;
       align-items: center;
@@ -137,7 +137,7 @@
       filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.8));
     }
 
-    /* Glassmorphism Styling */
+    /* Glassmorphism Panel Base */
     .glass-panel {
       background: rgba(15, 23, 42, 0.92);
       backdrop-filter: blur(16px);
@@ -201,7 +201,7 @@
     </button>
   </div>
 
-  <!-- Layer & Basemap Modal -->
+  <!-- Layer & Basemap Selection Modal -->
   <div id="layerModal" class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
     <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[80vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
@@ -228,7 +228,7 @@
 
       <div class="mb-4">
         <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">GPX / KML / KMZ ファイル読み込み</label>
-        <!-- iOS Safari kompatible Upload area without accept attribute -->
+        <!-- iOS Safari compatible file input structure without restrictive accept attribute -->
         <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-slate-600 hover:border-sky-400 bg-slate-800/40 cursor-pointer transition">
           <i class="fa-solid fa-file-circle-plus text-2xl text-sky-400 mb-1"></i>
           <span class="text-xs text-slate-300 font-medium">ログファイルを選択 (.gpx, .kml, .kmz)</span>
@@ -350,15 +350,15 @@
     </div>
   </div>
 
-  <!-- Map Canvas Container -->
+  <!-- Map Container -->
   <main class="flex-1 relative w-full h-full overflow-hidden">
     <div id="map"></div>
   </main>
 
-  <!-- Bottom Control Panel Footer -->
+  <!-- Bottom Control Footer -->
   <footer class="absolute bottom-0 left-0 right-0 z-20 pointer-events-none pb-safe px-3 py-2 flex flex-col items-center gap-2">
     
-    <!-- Ghost Replay Player & Checkpoint Toolbar -->
+    <!-- Ghost Replay Player & Checkpoint Controls -->
     <div id="ghostPlayerPanel" class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-3 shadow-2xl border border-sky-500/20 hidden transition-all">
       <div class="flex items-center justify-between text-xs mb-1.5 px-1">
         <div class="flex items-center gap-1.5 truncate pr-2">
@@ -374,9 +374,9 @@
         <input type="range" id="ghostSeekBar" min="0" max="100" value="0" step="0.1" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer">
       </div>
 
-      <!-- Start/Goal Checkpoint Controls -->
+      <!-- Checkpoint Control Buttons -->
       <div class="grid grid-cols-2 gap-2 text-[10px] mb-2 font-bold">
-        <!-- Start Line Control -->
+        <!-- Start Line -->
         <div class="flex items-center justify-between bg-slate-900/80 px-2 py-1.5 rounded-xl border border-amber-500/30">
           <div class="truncate mr-1 text-amber-300">
             <span>🏁</span> <span id="startLineLabel">S: 始点</span>
@@ -387,7 +387,7 @@
           </div>
         </div>
 
-        <!-- Goal Line Control -->
+        <!-- Goal Line -->
         <div class="flex items-center justify-between bg-slate-900/80 px-2 py-1.5 rounded-xl border border-emerald-500/30">
           <div class="truncate mr-1 text-emerald-300">
             <span>🚩</span> <span id="goalLineLabel">G: 終点</span>
@@ -421,11 +421,11 @@
       </div>
     </div>
 
-    <!-- Main Control Panel Footer -->
+    <!-- Main Live Recording Control Panel -->
     <div class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-2.5 sm:p-3 shadow-2xl flex flex-col gap-1.5">
       
       <div class="flex items-center justify-between gap-2">
-        <!-- Auto Tracking Mode Toggle Button -->
+        <!-- Auto Tracking Mode Switcher without icon -->
         <button id="trackTargetBtn" class="px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center transition active:scale-95 shrink-0" title="追尾ターゲット切り替え">
           <span id="trackTargetLabel">追尾: 現在地</span>
         </button>
@@ -443,7 +443,7 @@
           </div>
         </div>
 
-        <!-- Recording & Export Buttons -->
+        <!-- Action Buttons -->
         <div class="flex items-center gap-1.5">
           <button id="recToggleBtn" class="px-3 py-2 rounded-xl font-bold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition active:scale-95">
             <i class="fa-solid fa-play text-xs"></i> <span>記録開始</span>
@@ -455,26 +455,26 @@
         </div>
       </div>
 
-      <!-- Version Label placed inside bottom right of Control Panel -->
+      <!-- Version string inside bottom-right of control panel -->
       <div class="flex justify-end pt-0.5">
-        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.09.1209</span>
+        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.09.1230</span>
       </div>
     </div>
   </footer>
 
-  <!-- Toast Notification Overlay -->
+  <!-- Toast Container -->
   <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2 rounded-xl text-xs font-semibold text-slate-100 border border-slate-700 shadow-2xl pointer-events-none opacity-0 transition-opacity duration-300">
     <span id="toastMsg">Notification</span>
   </div>
 
   <script>
-    const APP_VERSION = 'v2026.10.09.1209';
+    const APP_VERSION = 'v2026.10.09.1230';
 
     // Default Koriyama City Center Coordinates
     const KORIYAMA_LAT = 37.398;
     const KORIYAMA_LNG = 140.388;
 
-    // Map Tile URLs
+    // Base Tile Layers
     const TILE_MAPS = {
       gsi_pale: 'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',
       gsi_std: 'https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png',
@@ -492,29 +492,21 @@
       esri: 'Tiles © Esri'
     };
 
-    // Track Configuration (Default 10px)
+    // Track Configuration (Default 10px width)
     const styleConfig = {
-      ghost: {
-        color: '#00d2ff',
-        weight: 10,
-        opacity: 0.85
-      },
-      myTrack: {
-        color: '#ff2d55',
-        weight: 10,
-        opacity: 0.90
-      }
+      ghost: { color: '#00d2ff', weight: 10, opacity: 0.85 },
+      myTrack: { color: '#ff2d55', weight: 10, opacity: 0.90 }
     };
 
-    // Tracking Mode: 'OFF' | 'MY_LOCATION' | 'GHOST'
+    // Auto Tracking State: 'OFF' | 'MY_LOCATION' | 'GHOST'
     let tracingMode = 'MY_LOCATION';
 
-    // Map Engine Handles
+    // Core Map Variables
     let map = null;
     let currentTileLayer = null;
     let watchPositionId = null;
 
-    // GPS Recording Engine
+    // GPS Recording State
     let isRecording = false;
     let recStartTime = 0;
     let recTimerInterval = null;
@@ -523,7 +515,7 @@
     let recPolyline = null;
     let userMarker = null;
 
-    // Ghost Engine Handles
+    // Ghost Engine State
     let ghostData = null;
     let ghostMarker = null;
     let ghostPolyline = null;
@@ -537,7 +529,7 @@
     let startLineMarker = null;
     let startLineCircle = null;
     let startLineIndex = null;
-    let isWaitingForStart = false;
+    let isWaitingForStart = false; // Standby flag awaiting live GPS arrival
 
     // Goal Checkpoint State
     let goalLineMarker = null;
@@ -556,6 +548,7 @@
     });
 
     function initMap() {
+      // Centered at Koriyama City (37.398, 140.388), Zoom Level 13
       map = L.map('map', {
         zoomControl: false,
         attributionControl: false
@@ -635,7 +628,7 @@
         map.panTo(latLng, { animate: true });
       }
 
-      // 1. Start Checkpoint Detection
+      // 1. Start Checkpoint Trigger Detection
       if (ghostData && isWaitingForStart && startLineIndex !== null) {
         const startPt = ghostData.points[startLineIndex];
         const distToStart = getDistanceMeters(latitude, longitude, startPt.lat, startPt.lng);
@@ -645,7 +638,7 @@
         }
       }
 
-      // 2. Goal Checkpoint Detection
+      // 2. Goal Checkpoint Trigger Detection
       if (isRecording && ghostData && goalLineIndex !== null) {
         const goalPt = ghostData.points[goalLineIndex];
         const distToGoal = getDistanceMeters(latitude, longitude, goalPt.lat, goalPt.lng);
@@ -663,7 +656,7 @@
         const totalDistMeters = calculateTrackDistance(recordedPoints);
         document.getElementById('recDist').innerHTML = `${(totalDistMeters / 1000).toFixed(2)} <span class="text-[9px] font-normal text-slate-400">km</span>`;
 
-        if (ghostData && isVsModeActive) {
+        if (ghostData && isVsModeActive && isGhostPlaying) {
           updateVsModeStats(currentGpsLocation);
         }
       }
@@ -684,11 +677,13 @@
         document.getElementById('vsOverlay').classList.remove('hidden');
       }
 
-      showToast('🏁 スタートライン通過！VSバトルスタート！');
+      // Start Ghost Playback Automatically upon Arrival
+      startGhostReplay();
+      showToast('🏁 スタート地点通過！ゴースト対決スタート！');
     }
 
     function triggerGoalLineFinish() {
-      // Calculate final stats
+      // Calculate final race metrics
       const totalDistMeters = calculateTrackDistance(recordedPoints);
       const elapsedSec = (Date.now() - recStartTime) / 1000;
       const avgSpeedKmh = elapsedSec > 0 ? (totalDistMeters / elapsedSec) * 3.6 : 0;
@@ -703,10 +698,11 @@
         isWin = diffSec <= 0;
       }
 
-      // Stop Recording & Replay
+      // Stop Recording and Ghost Playback
+      pauseGhostReplay();
       if (isRecording) toggleRecording();
 
-      // Show Result Modal
+      // Show Mario Kart Style Race Result
       document.getElementById('resultBadge').textContent = isWin ? '🏆' : '💀';
       document.getElementById('resultTitle').textContent = isWin ? 'YOU WIN!' : 'YOU LOSE...';
       document.getElementById('resultTitle').className = isWin ? 'text-2xl font-black text-amber-400 tracking-wider mb-1' : 'text-2xl font-black text-rose-400 tracking-wider mb-1';
@@ -731,14 +727,6 @@
         recordedPoints = [];
         recPolyline.setLatLngs([]);
         recStartTime = Date.now();
-        
-        if (ghostData && startLineIndex !== null) {
-          const startPt = ghostData.points[startLineIndex];
-          ghostCurrentTimeSec = startPt.timeOffsetSec;
-          ghostTimeOffsetSec = ghostCurrentTimeSec;
-        } else {
-          ghostTimeOffsetSec = 0;
-        }
 
         document.getElementById('recToggleBtn').className = "px-3 py-2 rounded-xl font-bold text-xs sm:text-sm bg-rose-500 hover:bg-rose-400 text-white shadow-lg shadow-rose-500/20 flex items-center gap-1.5 transition active:scale-95";
         document.getElementById('recToggleBtn').innerHTML = `<i class="fa-solid fa-square text-xs"></i> <span>記録停止</span>`;
@@ -752,11 +740,35 @@
         recTimerInterval = setInterval(updateRecTimer, 1000);
 
         if (ghostData) {
-          pauseGhostReplay();
-          isVsModeActive = true;
-          updateGhostMarkerPosition(ghostCurrentTimeSec);
-          document.getElementById('vsOverlay').classList.remove('hidden');
-          showToast('⚔️ VS並走モードスタート！');
+          if (startLineIndex !== null) {
+            // CRITICAL RULE: Move ghost to start line and set to PAUSED/STANDBY state until live GPS arrives
+            const startPt = ghostData.points[startLineIndex];
+            ghostCurrentTimeSec = startPt.timeOffsetSec;
+            ghostTimeOffsetSec = ghostCurrentTimeSec;
+            
+            pauseGhostReplay();
+            updateGhostMarkerPosition(ghostCurrentTimeSec);
+
+            // Check if live position is already inside start line radius
+            if (currentGpsLocation) {
+              const distToStart = getDistanceMeters(currentGpsLocation.lat, currentGpsLocation.lng, startPt.lat, startPt.lng);
+              if (distToStart <= CHECKPOINT_RADIUS_M) {
+                triggerStartLineMatch();
+                return;
+              }
+            }
+
+            isWaitingForStart = true;
+            isVsModeActive = true;
+            document.getElementById('vsOverlay').classList.remove('hidden');
+            showToast('🏁 スタート地点の通過を待機中...');
+          } else {
+            ghostTimeOffsetSec = 0;
+            isVsModeActive = true;
+            document.getElementById('vsOverlay').classList.remove('hidden');
+            startGhostReplay();
+            showToast('⚔️ VS並走モードスタート！');
+          }
         } else {
           showToast('🔴 GPS記録を開始しました');
         }
@@ -790,7 +802,7 @@
       const elapsedSec = elapsedMs / 1000;
       document.getElementById('recTime').textContent = formatSeconds(Math.floor(elapsedSec), true);
 
-      if (isVsModeActive && ghostData) {
+      if (isVsModeActive && ghostData && isGhostPlaying) {
         ghostCurrentTimeSec = elapsedSec + ghostTimeOffsetSec;
 
         if (ghostCurrentTimeSec < 0) ghostCurrentTimeSec = 0;
@@ -875,7 +887,7 @@
 
       map.fitBounds(ghostPolyline.getBounds(), { padding: [40, 40] });
 
-      // Default Checkpoints: Start=0, Goal=Last
+      // Default Checkpoints: Start = Point 0, Goal = Last Point
       setStartLineCheckpoint(0);
       setGoalLineCheckpoint(parsedPoints.length - 1);
 
@@ -886,7 +898,7 @@
       showToast(`👻 ゴースト読み込み完了: ${fileName}`);
     }
 
-    // Checkpoint Start Line
+    // Start Checkpoint Management
     function setStartLineCheckpoint(pointIndex) {
       if (!ghostData || !ghostData.points[pointIndex]) return;
 
@@ -930,7 +942,7 @@
       showToast('🏁 スタート地点を解除しました');
     }
 
-    // Checkpoint Goal Line
+    // Goal Checkpoint Management
     function setGoalLineCheckpoint(pointIndex) {
       if (!ghostData || !ghostData.points[pointIndex]) return;
 
@@ -1318,7 +1330,7 @@
     }
 
     function initEventListeners() {
-      // Zoom buttons explicitly bound
+      // Guaranteed zoom button event listeners
       document.getElementById('zoomInBtn').addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
