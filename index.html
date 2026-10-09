@@ -3,13 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>GPS Tracker & GPX Ghost Player v2026.10.09.0831</title>
+  <title>GPS Tracker & GPX Ghost Player v2026.10.09.1126</title>
   
-  <!-- PWA Meta Tags -->
+  <!-- PWA & Mobile Optimization Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0f172a">
-  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/854/854878.png">
 
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -19,7 +18,7 @@
         extend: {
           colors: {
             brand: { 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' },
-            ghost: { cyan: '#00d2ff', glow: '#00d2ff' }
+            ghost: { cyan: '#00d2ff' }
           }
         }
       }
@@ -46,6 +45,7 @@
       overflow: hidden !important;
       position: fixed;
       touch-action: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
 
     #map {
@@ -54,10 +54,10 @@
       z-index: 1;
     }
 
-    /* Top Right Control Panel positioned safely below the HUD */
+    /* Top Right Control Panel positioned below the top TIME GAP HUD (top: 92px) */
     .custom-map-controls {
       position: absolute;
-      top: 14px;
+      top: 92px;
       right: 14px;
       z-index: 25;
       display: flex;
@@ -83,6 +83,7 @@
       transition: all 0.15s ease-in-out;
       cursor: pointer;
       user-select: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     .ctrl-btn:active {
@@ -138,7 +139,7 @@
       border: 1px solid rgba(255, 255, 255, 0.14);
     }
 
-    .pb-safe { padding-bottom: env(safe-area-inset-bottom, 16px); }
+    .pb-safe { padding-bottom: env(safe-area-inset-bottom, 12px); }
     .pt-safe { padding-top: env(safe-area-inset-top, 12px); }
 
     input[type=range] {
@@ -151,23 +152,6 @@
       border: none;
       border-radius: 6px;
     }
-
-    /* Version display at bottom right */
-    .version-badge {
-      position: absolute;
-      bottom: 22px;
-      right: 12px;
-      z-index: 10;
-      font-family: monospace;
-      font-size: 10px;
-      color: rgba(255, 255, 255, 0.5);
-      background: rgba(15, 23, 42, 0.7);
-      padding: 2px 8px;
-      border-radius: 6px;
-      backdrop-filter: blur(4px);
-      pointer-events: none;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-    }
   </style>
 </head>
 
@@ -177,17 +161,17 @@
   <div id="vsOverlay" class="absolute top-3 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-sm sm:max-w-md hidden pointer-events-auto pt-safe">
     <div class="glass-panel rounded-2xl p-2.5 sm:p-3 border border-sky-500/30 shadow-2xl flex items-center justify-between text-xs sm:text-sm">
       <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 pr-1">
-        <span class="text-slate-400 text-[9px] uppercase tracking-wider font-bold">Time Gap</span>
+        <span class="text-slate-400 text-[9px] uppercase tracking-wider font-bold">TIME GAP</span>
         <span id="vsTimeDiff" class="font-mono text-base sm:text-lg font-black text-sky-400">--:--</span>
       </div>
 
       <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 px-1">
-        <span class="text-slate-400 text-[9px] uppercase tracking-wider font-bold">Distance Gap</span>
+        <span class="text-slate-400 text-[9px] uppercase tracking-wider font-bold">DISTANCE GAP</span>
         <span id="vsDistDiff" class="font-mono text-base sm:text-lg font-black text-emerald-400">0 m</span>
       </div>
 
       <div class="flex flex-col items-center flex-1 pl-1">
-        <span class="text-slate-400 text-[9px] uppercase tracking-wider font-bold">Speed (You / 👻)</span>
+        <span class="text-slate-400 text-[9px] uppercase tracking-wider font-bold">SPEED (You / 👻)</span>
         <div class="font-mono font-bold text-slate-200 text-xs sm:text-sm">
           <span id="vsMySpeed" class="text-rose-400">0</span> / <span id="vsGhostSpeed" class="text-sky-400">0</span> <span class="text-[9px] text-slate-400">km/h</span>
         </div>
@@ -195,7 +179,7 @@
     </div>
   </div>
 
-  <!-- Top-Right Control Toolbar (Positioned below top HUD) -->
+  <!-- Top-Right Control Toolbar (Positioned below top HUD at top: 92px) -->
   <div class="custom-map-controls pt-safe">
     <button id="zoomInBtn" class="ctrl-btn" title="拡大">
       <i class="fa-solid fa-plus"></i>
@@ -242,6 +226,7 @@
           <i class="fa-solid fa-file-circle-plus text-2xl text-sky-400 mb-1"></i>
           <span class="text-xs text-slate-300 font-medium">ログファイルを選択 (.gpx, .kml, .kmz)</span>
           <span class="text-[10px] text-slate-500 mt-0.5">※iOS Safari完全互換 (全ファイル選択許可構造)</span>
+          <!-- iOS Safari Compatible: NO accept attribute to avoid graying out -->
           <input type="file" id="fileInput" class="hidden">
         </label>
       </div>
@@ -261,7 +246,6 @@
           <h3 class="font-bold text-base text-slate-100 flex items-center gap-2">
             <i class="fa-solid fa-palette text-sky-400"></i> トラック＆表示スタイル設定
           </h3>
-          <span class="text-[10px] font-mono text-slate-400">Version v2026.10.09.0831</span>
         </div>
         <button id="closeStyleModal" class="text-slate-400 hover:text-white p-1">
           <i class="fa-solid fa-xmark text-lg"></i>
@@ -326,11 +310,12 @@
     </div>
   </div>
 
+  <!-- Map Main Section -->
   <main class="flex-1 relative w-full h-full overflow-hidden">
     <div id="map"></div>
-    <div class="version-badge">v2026.10.09.0831</div>
   </main>
 
+  <!-- Footer Controls & Replay Floating Bar -->
   <footer class="absolute bottom-0 left-0 right-0 z-20 pointer-events-none pb-safe px-3 py-2 flex flex-col items-center gap-2">
     
     <!-- Ghost Replay Control Panel -->
@@ -370,36 +355,43 @@
       </div>
     </div>
 
-    <!-- Main Control Toolbar -->
-    <div class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-2.5 sm:p-3 shadow-2xl flex items-center justify-between gap-2">
+    <!-- Main Recording Control Panel -->
+    <div class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-2.5 sm:p-3 shadow-2xl flex flex-col gap-1.5">
       
-      <!-- Auto Target Tracking Switcher without target icon -->
-      <button id="trackTargetBtn" class="px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center transition active:scale-95 shrink-0" title="追尾ターゲット切り替え">
-        <span id="trackTargetLabel">追尾: 現在地</span>
-      </button>
+      <div class="flex items-center justify-between gap-2">
+        <!-- Auto Target Tracking Switcher without target icon -->
+        <button id="trackTargetBtn" class="px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center transition active:scale-95 shrink-0" title="追尾ターゲット切り替え">
+          <span id="trackTargetLabel">追尾: 現在地</span>
+        </button>
 
-      <!-- Live GPS Recording Stats -->
-      <div class="flex items-center gap-2.5">
-        <div class="flex flex-col">
-          <span class="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">記録時間</span>
-          <span id="recTime" class="font-mono text-xs sm:text-sm font-black text-slate-100">00:00:00</span>
+        <!-- Live GPS Recording Stats -->
+        <div class="flex items-center gap-2.5">
+          <div class="flex flex-col">
+            <span class="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">記録時間</span>
+            <span id="recTime" class="font-mono text-xs sm:text-sm font-black text-slate-100">00:00:00</span>
+          </div>
+          <div class="h-5 w-px bg-slate-700/80"></div>
+          <div class="flex flex-col">
+            <span class="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">走行距離</span>
+            <span id="recDist" class="font-mono text-xs sm:text-sm font-black text-emerald-400">0.00 <span class="text-[9px] font-normal text-slate-400">km</span></span>
+          </div>
         </div>
-        <div class="h-5 w-px bg-slate-700/80"></div>
-        <div class="flex flex-col">
-          <span class="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">走行距離</span>
-          <span id="recDist" class="font-mono text-xs sm:text-sm font-black text-emerald-400">0.00 <span class="text-[9px] font-normal text-slate-400">km</span></span>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center gap-1.5">
+          <button id="recToggleBtn" class="px-3 py-2 rounded-xl font-bold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition active:scale-95">
+            <i class="fa-solid fa-play text-xs"></i> <span>記録開始</span>
+          </button>
+
+          <button id="exportGpxBtn" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center border border-slate-700 transition active:scale-95 disabled:opacity-40" disabled title="GPXエクスポート">
+            <i class="fa-solid fa-download text-xs sm:text-sm"></i>
+          </button>
         </div>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="flex items-center gap-1.5">
-        <button id="recToggleBtn" class="px-3 py-2 rounded-xl font-bold text-xs sm:text-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-lg shadow-emerald-500/20 flex items-center gap-1.5 transition active:scale-95">
-          <i class="fa-solid fa-play text-xs"></i> <span>記録開始</span>
-        </button>
-
-        <button id="exportGpxBtn" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center border border-slate-700 transition active:scale-95 disabled:opacity-40" disabled title="GPXエクスポート">
-          <i class="fa-solid fa-download text-xs sm:text-sm"></i>
-        </button>
+      <!-- Version Label Small Displayed in Bottom Right inside Control Panel -->
+      <div class="flex justify-end pt-0.5">
+        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.09.1126</span>
       </div>
     </div>
   </footer>
@@ -410,7 +402,7 @@
   </div>
 
   <script>
-    const APP_VERSION = 'v2026.10.09.0831';
+    const APP_VERSION = 'v2026.10.09.1126';
 
     // Default Koriyama City Coordinates
     const KORIYAMA_LAT = 37.398;
@@ -434,16 +426,16 @@
       esri: 'Tiles © Esri'
     };
 
-    // Default Track Styles
+    // Default Track Styles (10px default width)
     const styleConfig = {
       ghost: {
         color: '#00d2ff', // Cyan/Blue
-        weight: 10,       // 10px
+        weight: 10,       // Default 10px
         opacity: 0.85
       },
       myTrack: {
         color: '#ff2d55', // Vivid Red
-        weight: 10,       // 10px
+        weight: 10,       // Default 10px
         opacity: 0.90
       }
     };
@@ -485,13 +477,13 @@
     });
 
     function initMap() {
-      // Centered at Koriyama City
+      // Centered at Koriyama City (37.398, 140.388), Zoom Level 13
       map = L.map('map', {
         zoomControl: false,
         attributionControl: false
       }).setView([KORIYAMA_LAT, KORIYAMA_LNG], 13);
 
-      // Default Basemap: GSI Pale Tile
+      // Default Basemap: GSI Pale Tile (gsi_pale)
       setBaseTile('gsi_pale');
 
       recPolyline = L.polyline([], {
@@ -510,7 +502,7 @@
       });
       userMarker = L.marker([KORIYAMA_LAT, KORIYAMA_LNG], { icon: userDotIcon }).addTo(map);
 
-      // Disable auto-tracking on manual user map drag
+      // Disable auto-tracking on manual map drag
       map.on('dragstart', () => {
         if (tracingMode !== 'OFF') {
           setTracingMode('OFF');
@@ -823,6 +815,7 @@
       document.getElementById('ghostPlayIcon').className = "fa-solid fa-play text-base ml-0.5";
     }
 
+    // Explicit Seek adjustment maintains offset during VS mode
     function setGhostTimeExplicitly(targetTimeSec) {
       ghostCurrentTimeSec = Math.max(0, Math.min(ghostData ? ghostData.totalDurationSec : 0, targetTimeSec));
 
@@ -892,11 +885,12 @@
       const file = e.target.files[0];
       if (!file) return;
 
+      // Pure JS Extension Check for iOS Safari compatibility
       const ext = file.name.split('.').pop().toLowerCase();
       const allowedExts = ['gpx', 'kml', 'kmz', 'xml'];
 
       if (!allowedExts.includes(ext)) {
-        alert(`❌ 未対応のファイル形式です (.${ext})\n\n対応形式: .gpx, .kml, .kmz`);
+        showToast(`❌ 未対応のファイル形式です (.${ext})`);
         e.target.value = '';
         return;
       }
@@ -1062,7 +1056,7 @@
     }
 
     function initEventListeners() {
-      // Direct Top-Right Zoom Buttons
+      // Direct Zoom In/Out Buttons (Guaranteed event binding)
       document.getElementById('zoomInBtn').addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1114,6 +1108,7 @@
         setGhostTimeExplicitly(targetSec);
       });
 
+      // Style Sliders
       document.getElementById('ghostColorPicker').addEventListener('input', (e) => {
         styleConfig.ghost.color = e.target.value;
         applyStyleUpdates();
