@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>GPS Tracker & GPX Ghost Player v2026.10.09.1303</title>
+  <title>GPS Tracker & GPX Ghost Player v2026.10.09.1829</title>
 
-  <!-- PWA & Mobile Optimization Meta Tags -->
+  <!-- PWA & Mobile Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0f172a">
@@ -54,7 +54,7 @@
       z-index: 1;
     }
 
-    /* Right side controls, aligned below top HUD (top: 92px) */
+    /* Right side controls starting safely below top HUD (top: 92px) */
     .custom-map-controls {
       position: absolute;
       top: 92px;
@@ -158,12 +158,19 @@
       border: none;
       border-radius: 6px;
     }
+
+    /* Bottom Panel Collapse Animations */
+    .bottom-footer-container {
+      transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .bottom-footer-container.collapsed {
+      transform: translateY(calc(100% - 46px));
+    }
   </style>
 </head>
 
 <body class="h-full overflow-hidden flex flex-col font-sans select-none bg-slate-950 text-slate-100">
 
-  <!-- Top Center TIME GAP HUD Panel -->
   <div id="vsOverlay" class="absolute top-3 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-sm sm:max-w-md hidden pointer-events-auto pt-safe">
     <div class="glass-panel rounded-2xl p-2.5 sm:p-3 border border-sky-500/30 shadow-2xl flex items-center justify-between text-xs sm:text-sm">
       <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 pr-1">
@@ -185,7 +192,6 @@
     </div>
   </div>
 
-  <!-- Top-Right Toolbar Buttons (Cleanly starting at top: 92px) -->
   <div class="custom-map-controls pt-safe">
     <button id="zoomInBtn" class="ctrl-btn" title="拡大">
       <i class="fa-solid fa-plus"></i>
@@ -201,7 +207,6 @@
     </button>
   </div>
 
-  <!-- Layer & Basemap Modal -->
   <div id="layerModal" class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
     <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[80vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
@@ -228,7 +233,7 @@
 
       <div class="mb-4">
         <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">GPX / KML / KMZ ファイル読み込み</label>
-        <!-- Full iOS Safari compatibility: no accept attribute -->
+        <!-- iOS Safari kompatible Upload area without accept attribute -->
         <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-slate-600 hover:border-sky-400 bg-slate-800/40 cursor-pointer transition">
           <i class="fa-solid fa-file-circle-plus text-2xl text-sky-400 mb-1"></i>
           <span class="text-xs text-slate-300 font-medium">ログファイルを選択 (.gpx, .kml, .kmz)</span>
@@ -244,7 +249,6 @@
     </div>
   </div>
 
-  <!-- Style Settings Modal -->
   <div id="styleModal" class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
     <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[85vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
@@ -256,7 +260,7 @@
         </button>
       </div>
 
-      <!-- Ghost Line Styling -->
+      <!-- Ghost Config -->
       <div class="mb-6 bg-slate-900/60 p-3.5 rounded-xl border border-sky-500/30">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -284,7 +288,7 @@
         </div>
       </div>
 
-      <!-- Live Track Styling -->
+      <!-- Live GPS Config -->
       <div class="bg-slate-900/60 p-3.5 rounded-xl border border-rose-500/30">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -314,7 +318,6 @@
     </div>
   </div>
 
-  <!-- Race Result Summary Modal -->
   <div id="resultModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 transition-opacity">
     <div class="glass-panel w-full max-w-sm rounded-3xl p-6 border border-yellow-500/40 shadow-2xl text-center flex flex-col items-center">
       <div id="resultBadge" class="text-5xl mb-2 animate-bounce">🏆</div>
@@ -350,14 +353,21 @@
     </div>
   </div>
 
-  <!-- Map Section -->
+  <!-- Map Main Section -->
   <main class="flex-1 relative w-full h-full overflow-hidden">
     <div id="map"></div>
   </main>
 
-  <!-- Bottom Floating Control Panel Footer -->
-  <footer class="absolute bottom-0 left-0 right-0 z-20 pointer-events-none pb-safe px-3 py-2 flex flex-col items-center gap-2">
+  <footer id="bottomFooter" class="bottom-footer-container absolute bottom-0 left-0 right-0 z-20 pointer-events-none pb-safe px-3 py-2 flex flex-col items-center gap-2">
     
+    <!-- Collapsible Toggle Handle Button -->
+    <div class="pointer-events-auto flex justify-center w-full max-w-lg mb-0.5">
+      <button id="toggleMenuCollapseBtn" class="px-4 py-1 rounded-full glass-panel border border-slate-700/80 text-sky-400 text-xs font-bold shadow-lg hover:text-white hover:border-sky-500 transition active:scale-95 flex items-center gap-1.5" title="メニュー表示/非表示切替">
+        <i id="toggleMenuIcon" class="fa-solid fa-chevron-down text-xs"></i>
+        <span id="toggleMenuText">メニューを折りたたむ</span>
+      </button>
+    </div>
+
     <!-- Ghost Replay Player & Checkpoint Controls -->
     <div id="ghostPlayerPanel" class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-3 shadow-2xl border border-sky-500/20 hidden transition-all">
       <div class="flex items-center justify-between text-xs mb-1.5 px-1">
@@ -422,7 +432,7 @@
     </div>
 
     <!-- Main Control Panel Footer -->
-    <div class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-2.5 sm:p-3 shadow-2xl flex flex-col gap-1.5">
+    <div id="mainControlPanel" class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-2.5 sm:p-3 shadow-2xl flex flex-col gap-1.5">
       
       <div class="flex items-center justify-between gap-2">
         <!-- Auto Tracking Mode Toggle Button (Text only, no target icon) -->
@@ -457,18 +467,18 @@
 
       <!-- Version Label in Bottom Right inside Control Panel -->
       <div class="flex justify-end pt-0.5">
-        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.09.1303</span>
+        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.09.1829</span>
       </div>
     </div>
   </footer>
 
-  <!-- Toast Notification Overlay -->
+  <!-- Toast Container -->
   <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2 rounded-xl text-xs font-semibold text-slate-100 border border-slate-700 shadow-2xl pointer-events-none opacity-0 transition-opacity duration-300">
     <span id="toastMsg">Notification</span>
   </div>
 
   <script>
-    const APP_VERSION = 'v2026.10.09.1303';
+    const APP_VERSION = 'v2026.10.09.1829';
 
     // Default Coordinates: Koriyama City, Fukushima
     const KORIYAMA_LAT = 37.398;
@@ -501,6 +511,9 @@
     // Auto Tracking Mode State: 'OFF' | 'MY_LOCATION' | 'GHOST'
     let tracingMode = 'MY_LOCATION';
 
+    // Menu Collapse State
+    let isMenuCollapsed = false;
+
     // Map Engine Handles
     let map = null;
     let currentTileLayer = null;
@@ -525,20 +538,19 @@
     let ghostAnimationTimer = null;
     let isVsModeActive = false;
 
-    // Start Line Checkpoint State
+    // Checkpoint States
     let startLineMarker = null;
     let startLineCircle = null;
     let startLineIndex = null;
-    let isWaitingForStart = false; // Standby flag awaiting live GPS arrival
+    let isWaitingForStart = false;
 
-    // Goal Line Checkpoint State
     let goalLineMarker = null;
     let goalLineCircle = null;
     let goalLineIndex = null;
 
     const CHECKPOINT_RADIUS_M = 25;
 
-    // Loaded KML/KMZ Overlays
+    // Loaded Overlay Layers
     let loadedLayers = [];
 
     window.addEventListener('load', () => {
@@ -548,13 +560,11 @@
     });
 
     function initMap() {
-      // Centered at Koriyama City (37.398, 140.388), Zoom Level 13
       map = L.map('map', {
         zoomControl: false,
         attributionControl: false
       }).setView([KORIYAMA_LAT, KORIYAMA_LNG], 13);
 
-      // Default Basemap Tile: GSI Pale
       setBaseTile('gsi_pale');
 
       recPolyline = L.polyline([], {
@@ -603,6 +613,28 @@
       });
     }
 
+    // Dynamic Map Focus with Offset Padding when Bottom Menu is Expanded
+    function panMapToLocationWithOffset(latLng) {
+      if (!map || !latLng) return;
+
+      if (isMenuCollapsed) {
+        // Menu collapsed: pan to normal screen center
+        map.panTo(latLng, { animate: true });
+      } else {
+        // Calculate bottom panel height to offset map focus upwards
+        const footerEl = document.getElementById('bottomFooter');
+        const footerHeight = footerEl ? footerEl.offsetHeight : 160;
+
+        // Shift view upwards by half the bottom menu height
+        const offsetY = footerHeight / 2;
+        const targetPoint = map.latLngToContainerPoint(latLng);
+        const offsetPoint = L.point(targetPoint.x, targetPoint.y + offsetY);
+        const offsetLatLng = map.containerPointToLatLng(offsetPoint);
+
+        map.panTo(offsetLatLng, { animate: true });
+      }
+    }
+
     function startGpsTracking() {
       if (!('geolocation' in navigator)) {
         showToast('⚠️ GPS機能がブラウザで無効です');
@@ -625,10 +657,10 @@
       userMarker.setLatLng(latLng);
 
       if (tracingMode === 'MY_LOCATION') {
-        map.panTo(latLng, { animate: true });
+        panMapToLocationWithOffset(latLng);
       }
 
-      // 1. Checkpoint Start Line Detection
+      // Checkpoint Start Line Trigger Detection
       if (ghostData && isWaitingForStart && startLineIndex !== null) {
         const startPt = ghostData.points[startLineIndex];
         const distToStart = getDistanceMeters(latitude, longitude, startPt.lat, startPt.lng);
@@ -638,7 +670,7 @@
         }
       }
 
-      // 2. Checkpoint Goal Line Detection
+      // Checkpoint Goal Line Trigger Detection
       if (isRecording && ghostData && goalLineIndex !== null) {
         const goalPt = ghostData.points[goalLineIndex];
         const distToGoal = getDistanceMeters(latitude, longitude, goalPt.lat, goalPt.lng);
@@ -677,13 +709,11 @@
         document.getElementById('vsOverlay').classList.remove('hidden');
       }
 
-      // Start Ghost Playback Automatically upon Arrival at Start Line
       startGhostReplay();
       showToast('🏁 スタート地点通過！ゴースト対決スタート！');
     }
 
     function triggerGoalLineFinish() {
-      // Calculate race results
       const totalDistMeters = calculateTrackDistance(recordedPoints);
       const elapsedSec = (Date.now() - recStartTime) / 1000;
       const avgSpeedKmh = elapsedSec > 0 ? (totalDistMeters / elapsedSec) * 3.6 : 0;
@@ -698,11 +728,10 @@
         isWin = diffSec <= 0;
       }
 
-      // Stop ghost replay and recording
       pauseGhostReplay();
       if (isRecording) toggleRecording();
 
-      // Show Mario Kart Style Race Summary Modal
+      // Show Result Summary Modal
       document.getElementById('resultBadge').textContent = isWin ? '🏆' : '💀';
       document.getElementById('resultTitle').textContent = isWin ? 'YOU WIN!' : 'YOU LOSE...';
       document.getElementById('resultTitle').className = isWin ? 'text-2xl font-black text-amber-400 tracking-wider mb-1' : 'text-2xl font-black text-rose-400 tracking-wider mb-1';
@@ -741,18 +770,15 @@
 
         if (ghostData) {
           if (startLineIndex !== null) {
-            // CRITICAL REQUIREMENT: Rewind ghost to start line position AND designated time offset & pause
+            // Rewind ghost to start line position & designated time offset, then pause
             const startPt = ghostData.points[startLineIndex];
             
-            // 1. Rewind replay time and offset to start line time
             ghostCurrentTimeSec = startPt.timeOffsetSec;
             ghostTimeOffsetSec = ghostCurrentTimeSec;
             
-            // 2. Pause ghost replay & update map marker and seekbar position
             pauseGhostReplay();
             setGhostTimeExplicitly(startPt.timeOffsetSec);
 
-            // Check if live GPS is already inside start line radius
             if (currentGpsLocation) {
               const distToStart = getDistanceMeters(currentGpsLocation.lat, currentGpsLocation.lng, startPt.lat, startPt.lng);
               if (distToStart <= CHECKPOINT_RADIUS_M) {
@@ -890,7 +916,6 @@
 
       map.fitBounds(ghostPolyline.getBounds(), { padding: [40, 40] });
 
-      // Default Checkpoints: Start = Point 0, Goal = Last Point
       setStartLineCheckpoint(0);
       setGoalLineCheckpoint(parsedPoints.length - 1);
 
@@ -901,7 +926,7 @@
       showToast(`👻 ゴースト読み込み完了: ${fileName}`);
     }
 
-    // Start Checkpoint Management
+    // Checkpoint Management Functions
     function setStartLineCheckpoint(pointIndex) {
       if (!ghostData || !ghostData.points[pointIndex]) return;
 
@@ -945,7 +970,6 @@
       showToast('🏁 スタート地点を解除しました');
     }
 
-    // Goal Checkpoint Management
     function setGoalLineCheckpoint(pointIndex) {
       if (!ghostData || !ghostData.points[pointIndex]) return;
 
@@ -1030,7 +1054,7 @@
         ghostMarker.setLatLng([state.lat, state.lng]);
 
         if (tracingMode === 'GHOST') {
-          map.panTo([state.lat, state.lng], { animate: true });
+          panMapToLocationWithOffset([state.lat, state.lng]);
         }
       }
     }
@@ -1321,19 +1345,45 @@
       if (mode === 'MY_LOCATION') {
         btn.className = "px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center transition active:scale-95 shrink-0";
         label.textContent = "追尾: 現在地";
-        if (currentGpsLocation) map.panTo([currentGpsLocation.lat, currentGpsLocation.lng]);
+        if (currentGpsLocation) panMapToLocationWithOffset([currentGpsLocation.lat, currentGpsLocation.lng]);
       } else if (mode === 'GHOST') {
         btn.className = "px-3 py-2 rounded-xl bg-cyan-950/80 text-cyan-300 font-bold text-xs border border-cyan-400/50 flex items-center transition active:scale-95 shrink-0";
         label.textContent = "追尾: ゴースト";
-        if (ghostData && ghostMarker) map.panTo(ghostMarker.getLatLng());
+        if (ghostData && ghostMarker) panMapToLocationWithOffset(ghostMarker.getLatLng());
       } else {
         btn.className = "px-3 py-2 rounded-xl bg-slate-800/80 text-slate-400 font-bold text-xs border border-slate-700/80 flex items-center transition active:scale-95 shrink-0";
         label.textContent = "追尾: オフ";
       }
     }
 
+    function toggleBottomMenuCollapse() {
+      isMenuCollapsed = !isMenuCollapsed;
+      const footerEl = document.getElementById('bottomFooter');
+      const iconEl = document.getElementById('toggleMenuIcon');
+      const textEl = document.getElementById('toggleMenuText');
+
+      if (isMenuCollapsed) {
+        footerEl.classList.add('collapsed');
+        iconEl.className = "fa-solid fa-chevron-up text-xs";
+        textEl.textContent = "メニューを表示";
+      } else {
+        footerEl.classList.remove('collapsed');
+        iconEl.className = "fa-solid fa-chevron-down text-xs";
+        textEl.textContent = "メニューを折りたたむ";
+      }
+
+      // Re-trigger location centering with updated offset
+      if (tracingMode === 'MY_LOCATION' && currentGpsLocation) {
+        panMapToLocationWithOffset([currentGpsLocation.lat, currentGpsLocation.lng]);
+      } else if (tracingMode === 'GHOST' && ghostMarker) {
+        panMapToLocationWithOffset(ghostMarker.getLatLng());
+      }
+    }
+
     function initEventListeners() {
-      // Zoom Controls (explicitly bound)
+      document.getElementById('toggleMenuCollapseBtn').addEventListener('click', toggleBottomMenuCollapse);
+
+      // Top-right map zoom controls
       document.getElementById('zoomInBtn').addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
