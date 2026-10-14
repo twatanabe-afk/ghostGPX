@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>GPS Tracker & GPX Ghost Player v2026.10.14.1215</title>
+  <title>GPS Tracker & GPX Ghost Player v2026.10.14.1335</title>
 
   <!-- PWA & Mobile Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -473,7 +473,7 @@
 
       <!-- Version Label in Bottom Right inside Control Panel -->
       <div class="flex justify-end pt-0.5">
-        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.14.1215</span>
+        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.14.1335</span>
       </div>
     </div>
   </footer>
@@ -484,7 +484,7 @@
   </div>
 
   <script>
-    const APP_VERSION = 'v2026.10.14.1215';
+    const APP_VERSION = 'v2026.10.14.1335';
 
     // Default Coordinates: Koriyama City, Fukushima
     const KORIYAMA_LAT = 37.398;
@@ -1416,7 +1416,6 @@
         textEl.textContent = "メニューを折りたたむ";
       }
 
-      // Re-trigger location centering with updated offset
       if (tracingMode === 'MY_LOCATION' && currentGpsLocation) {
         panMapToLocationWithOffset([currentGpsLocation.lat, currentGpsLocation.lng]);
       } else if (tracingMode === 'GHOST' && ghostMarker) {
