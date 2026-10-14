@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>GPS Tracker & GPX Ghost Player v2026.10.14.1208</title>
+  <title>GPS Tracker & GPX Ghost Player v2026.10.14.1215</title>
 
   <!-- PWA & Mobile Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -236,7 +236,7 @@
 
       <div class="mb-4">
         <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">GPX / KML / KMZ ファイル読み込み</label>
-        <!-- Full iOS Safari compatibility: no accept attribute -->
+        <!-- iOS Safari compatibility: no accept attribute -->
         <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-slate-600 hover:border-sky-400 bg-slate-800/40 cursor-pointer transition">
           <i class="fa-solid fa-file-circle-plus text-2xl text-sky-400 mb-1"></i>
           <span class="text-xs text-slate-300 font-medium">ログファイルを選択 (.gpx, .kml, .kmz)</span>
@@ -473,7 +473,7 @@
 
       <!-- Version Label in Bottom Right inside Control Panel -->
       <div class="flex justify-end pt-0.5">
-        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.14.1208</span>
+        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.14.1215</span>
       </div>
     </div>
   </footer>
@@ -484,7 +484,7 @@
   </div>
 
   <script>
-    const APP_VERSION = 'v2026.10.14.1208';
+    const APP_VERSION = 'v2026.10.14.1215';
 
     // Default Coordinates: Koriyama City, Fukushima
     const KORIYAMA_LAT = 37.398;
@@ -624,14 +624,11 @@
       if (!map || !latLng) return;
 
       if (isMenuCollapsed) {
-        // Menu collapsed: pan to normal screen center
         map.panTo(latLng, { animate: true });
       } else {
-        // Calculate bottom panel height to offset map focus upwards
         const footerEl = document.getElementById('bottomFooter');
         const footerHeight = footerEl ? footerEl.offsetHeight : 160;
 
-        // Shift view upwards by half the bottom menu height
         const offsetY = footerHeight / 2;
         const targetPoint = map.latLngToContainerPoint(latLng);
         const offsetPoint = L.point(targetPoint.x, targetPoint.y + offsetY);
@@ -806,15 +803,12 @@
             // CRITICAL REQUIREMENT: Rewind ghost to start line position AND designated time offset & pause
             const startPt = ghostData.points[startLineIndex];
             
-            // 1. Rewind replay time and offset to start line time
             ghostCurrentTimeSec = startPt.timeOffsetSec;
             ghostTimeOffsetSec = ghostCurrentTimeSec;
             
-            // 2. Pause ghost replay & update map marker and seekbar position
             pauseGhostReplay();
             setGhostTimeExplicitly(startPt.timeOffsetSec);
 
-            // Check if live GPS is already inside start line radius
             if (currentGpsLocation) {
               const distToStart = getDistanceMeters(currentGpsLocation.lat, currentGpsLocation.lng, startPt.lat, startPt.lng);
               if (distToStart <= CHECKPOINT_RADIUS_M) {
