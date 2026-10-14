@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>GPS Tracker & GPX Ghost Player v2026.10.09.1829</title>
+  <title>GPS Tracker & GPX Ghost Player v2026.10.14.1208</title>
 
   <!-- PWA & Mobile Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -32,7 +32,7 @@
   <!-- FontAwesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
 
-  <!-- JSZip & toGeoJSON for KML/KMZ/GPX handling -->
+  <!-- JSZip & toGeoJSON for KML/KMZ/GPX parsing -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://unpkg.com/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
 
@@ -54,7 +54,7 @@
       z-index: 1;
     }
 
-    /* Right side controls starting safely below top HUD (top: 92px) */
+    /* Right side controls, aligned below top HUD (top: 92px) */
     .custom-map-controls {
       position: absolute;
       top: 92px;
@@ -159,18 +159,19 @@
       border-radius: 6px;
     }
 
-    /* Bottom Panel Collapse Animations */
+    /* Collapsible Bottom Footer Animation */
     .bottom-footer-container {
       transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .bottom-footer-container.collapsed {
-      transform: translateY(calc(100% - 46px));
+      transform: translateY(calc(100% - 42px));
     }
   </style>
 </head>
 
 <body class="h-full overflow-hidden flex flex-col font-sans select-none bg-slate-950 text-slate-100">
 
+  <!-- Top Center TIME GAP HUD Panel -->
   <div id="vsOverlay" class="absolute top-3 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-sm sm:max-w-md hidden pointer-events-auto pt-safe">
     <div class="glass-panel rounded-2xl p-2.5 sm:p-3 border border-sky-500/30 shadow-2xl flex items-center justify-between text-xs sm:text-sm">
       <div class="flex flex-col items-center flex-1 border-r border-slate-700/60 pr-1">
@@ -192,6 +193,7 @@
     </div>
   </div>
 
+  <!-- Top-Right Toolbar Buttons (Cleanly starting at top: 92px) -->
   <div class="custom-map-controls pt-safe">
     <button id="zoomInBtn" class="ctrl-btn" title="拡大">
       <i class="fa-solid fa-plus"></i>
@@ -207,6 +209,7 @@
     </button>
   </div>
 
+  <!-- Layer & Basemap Modal -->
   <div id="layerModal" class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
     <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[80vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
@@ -233,7 +236,7 @@
 
       <div class="mb-4">
         <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">GPX / KML / KMZ ファイル読み込み</label>
-        <!-- iOS Safari kompatible Upload area without accept attribute -->
+        <!-- Full iOS Safari compatibility: no accept attribute -->
         <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-slate-600 hover:border-sky-400 bg-slate-800/40 cursor-pointer transition">
           <i class="fa-solid fa-file-circle-plus text-2xl text-sky-400 mb-1"></i>
           <span class="text-xs text-slate-300 font-medium">ログファイルを選択 (.gpx, .kml, .kmz)</span>
@@ -249,6 +252,7 @@
     </div>
   </div>
 
+  <!-- Style Settings Modal -->
   <div id="styleModal" class="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm hidden flex items-end sm:items-center justify-center p-0 sm:p-4 transition-opacity">
     <div class="glass-panel w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 border-t sm:border border-slate-700/80 max-h-[85vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
@@ -260,7 +264,7 @@
         </button>
       </div>
 
-      <!-- Ghost Config -->
+      <!-- Ghost Line Styling -->
       <div class="mb-6 bg-slate-900/60 p-3.5 rounded-xl border border-sky-500/30">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -288,7 +292,7 @@
         </div>
       </div>
 
-      <!-- Live GPS Config -->
+      <!-- Live Track Styling -->
       <div class="bg-slate-900/60 p-3.5 rounded-xl border border-rose-500/30">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -318,6 +322,7 @@
     </div>
   </div>
 
+  <!-- Race Result Summary Modal -->
   <div id="resultModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden flex items-center justify-center p-4 transition-opacity">
     <div class="glass-panel w-full max-w-sm rounded-3xl p-6 border border-yellow-500/40 shadow-2xl text-center flex flex-col items-center">
       <div id="resultBadge" class="text-5xl mb-2 animate-bounce">🏆</div>
@@ -353,11 +358,12 @@
     </div>
   </div>
 
-  <!-- Map Main Section -->
+  <!-- Map Section -->
   <main class="flex-1 relative w-full h-full overflow-hidden">
     <div id="map"></div>
   </main>
 
+  <!-- Bottom Floating Control Panel Footer -->
   <footer id="bottomFooter" class="bottom-footer-container absolute bottom-0 left-0 right-0 z-20 pointer-events-none pb-safe px-3 py-2 flex flex-col items-center gap-2">
     
     <!-- Collapsible Toggle Handle Button -->
@@ -435,7 +441,7 @@
     <div id="mainControlPanel" class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-2.5 sm:p-3 shadow-2xl flex flex-col gap-1.5">
       
       <div class="flex items-center justify-between gap-2">
-        <!-- Auto Tracking Mode Toggle Button (Text only, no target icon) -->
+        <!-- Auto Tracking Mode Toggle Button (Text only) -->
         <button id="trackTargetBtn" class="px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center transition active:scale-95 shrink-0" title="追尾ターゲット切り替え">
           <span id="trackTargetLabel">追尾: 現在地</span>
         </button>
@@ -467,18 +473,18 @@
 
       <!-- Version Label in Bottom Right inside Control Panel -->
       <div class="flex justify-end pt-0.5">
-        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.09.1829</span>
+        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.14.1208</span>
       </div>
     </div>
   </footer>
 
-  <!-- Toast Container -->
+  <!-- Toast Notification Overlay -->
   <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 glass-panel px-4 py-2 rounded-xl text-xs font-semibold text-slate-100 border border-slate-700 shadow-2xl pointer-events-none opacity-0 transition-opacity duration-300">
     <span id="toastMsg">Notification</span>
   </div>
 
   <script>
-    const APP_VERSION = 'v2026.10.09.1829';
+    const APP_VERSION = 'v2026.10.14.1208';
 
     // Default Coordinates: Koriyama City, Fukushima
     const KORIYAMA_LAT = 37.398;
@@ -508,7 +514,7 @@
       myTrack: { color: '#ff2d55', weight: 10, opacity: 0.90 }
     };
 
-    // Auto Tracking Mode State: 'OFF' | 'MY_LOCATION' | 'GHOST'
+    // Auto Tracking Mode State: 'OFF' | 'MY_LOCATION' | 'GHOST' | 'BOTH_AUTO'
     let tracingMode = 'MY_LOCATION';
 
     // Menu Collapse State
@@ -635,6 +641,30 @@
       }
     }
 
+    // Auto Zoom & Fit Both Current Position and Ghost in View
+    function fitBothPointsInView() {
+      if (!map || !currentGpsLocation) return;
+
+      const p1 = L.latLng(currentGpsLocation.lat, currentGpsLocation.lng);
+      
+      if (ghostData && ghostMarker) {
+        const p2 = ghostMarker.getLatLng();
+        const bounds = L.latLngBounds([p1, p2]);
+
+        const footerEl = document.getElementById('bottomFooter');
+        const bottomPadding = (!isMenuCollapsed && footerEl) ? footerEl.offsetHeight + 20 : 40;
+
+        map.fitBounds(bounds, {
+          paddingTopLeft: [40, 100],
+          paddingBottomRight: [40, bottomPadding],
+          maxZoom: 17,
+          animate: true
+        });
+      } else {
+        panMapToLocationWithOffset(p1);
+      }
+    }
+
     function startGpsTracking() {
       if (!('geolocation' in navigator)) {
         showToast('⚠️ GPS機能がブラウザで無効です');
@@ -656,11 +686,14 @@
       const latLng = [latitude, longitude];
       userMarker.setLatLng(latLng);
 
+      // Auto tracking dispatch
       if (tracingMode === 'MY_LOCATION') {
         panMapToLocationWithOffset(latLng);
+      } else if (tracingMode === 'BOTH_AUTO') {
+        fitBothPointsInView();
       }
 
-      // Checkpoint Start Line Trigger Detection
+      // 1. Checkpoint Start Line Trigger Detection
       if (ghostData && isWaitingForStart && startLineIndex !== null) {
         const startPt = ghostData.points[startLineIndex];
         const distToStart = getDistanceMeters(latitude, longitude, startPt.lat, startPt.lng);
@@ -670,7 +703,7 @@
         }
       }
 
-      // Checkpoint Goal Line Trigger Detection
+      // 2. Checkpoint Goal Line Trigger Detection
       if (isRecording && ghostData && goalLineIndex !== null) {
         const goalPt = ghostData.points[goalLineIndex];
         const distToGoal = getDistanceMeters(latitude, longitude, goalPt.lat, goalPt.lng);
@@ -770,15 +803,18 @@
 
         if (ghostData) {
           if (startLineIndex !== null) {
-            // Rewind ghost to start line position & designated time offset, then pause
+            // CRITICAL REQUIREMENT: Rewind ghost to start line position AND designated time offset & pause
             const startPt = ghostData.points[startLineIndex];
             
+            // 1. Rewind replay time and offset to start line time
             ghostCurrentTimeSec = startPt.timeOffsetSec;
             ghostTimeOffsetSec = ghostCurrentTimeSec;
             
+            // 2. Pause ghost replay & update map marker and seekbar position
             pauseGhostReplay();
             setGhostTimeExplicitly(startPt.timeOffsetSec);
 
+            // Check if live GPS is already inside start line radius
             if (currentGpsLocation) {
               const distToStart = getDistanceMeters(currentGpsLocation.lat, currentGpsLocation.lng, startPt.lat, startPt.lng);
               if (distToStart <= CHECKPOINT_RADIUS_M) {
@@ -916,6 +952,7 @@
 
       map.fitBounds(ghostPolyline.getBounds(), { padding: [40, 40] });
 
+      // Default Checkpoints: Start = Point 0, Goal = Last Point
       setStartLineCheckpoint(0);
       setGoalLineCheckpoint(parsedPoints.length - 1);
 
@@ -1055,6 +1092,8 @@
 
         if (tracingMode === 'GHOST') {
           panMapToLocationWithOffset([state.lat, state.lng]);
+        } else if (tracingMode === 'BOTH_AUTO') {
+          fitBothPointsInView();
         }
       }
     }
@@ -1147,7 +1186,7 @@
       document.getElementById('ghostPlayerPanel').classList.add('hidden');
       document.getElementById('vsOverlay').classList.add('hidden');
 
-      if (tracingMode === 'GHOST') {
+      if (tracingMode === 'GHOST' || tracingMode === 'BOTH_AUTO') {
         setTracingMode('MY_LOCATION');
       }
     }
@@ -1323,12 +1362,19 @@
       }
     }
 
+    // 4-Stage Tracking Mode Cycling: MY_LOCATION -> GHOST -> BOTH_AUTO -> OFF
     function cycleTracingMode() {
       if (tracingMode === 'OFF') {
         setTracingMode('MY_LOCATION');
       } else if (tracingMode === 'MY_LOCATION') {
         if (ghostData && ghostMarker) {
           setTracingMode('GHOST');
+        } else {
+          setTracingMode('OFF');
+        }
+      } else if (tracingMode === 'GHOST') {
+        if (ghostData && ghostMarker) {
+          setTracingMode('BOTH_AUTO');
         } else {
           setTracingMode('OFF');
         }
@@ -1350,6 +1396,10 @@
         btn.className = "px-3 py-2 rounded-xl bg-cyan-950/80 text-cyan-300 font-bold text-xs border border-cyan-400/50 flex items-center transition active:scale-95 shrink-0";
         label.textContent = "追尾: ゴースト";
         if (ghostData && ghostMarker) panMapToLocationWithOffset(ghostMarker.getLatLng());
+      } else if (mode === 'BOTH_AUTO') {
+        btn.className = "px-3 py-2 rounded-xl bg-purple-950/80 text-purple-300 font-bold text-xs border border-purple-400/50 flex items-center transition active:scale-95 shrink-0";
+        label.textContent = "追尾: 両者自動";
+        fitBothPointsInView();
       } else {
         btn.className = "px-3 py-2 rounded-xl bg-slate-800/80 text-slate-400 font-bold text-xs border border-slate-700/80 flex items-center transition active:scale-95 shrink-0";
         label.textContent = "追尾: オフ";
@@ -1377,6 +1427,8 @@
         panMapToLocationWithOffset([currentGpsLocation.lat, currentGpsLocation.lng]);
       } else if (tracingMode === 'GHOST' && ghostMarker) {
         panMapToLocationWithOffset(ghostMarker.getLatLng());
+      } else if (tracingMode === 'BOTH_AUTO') {
+        fitBothPointsInView();
       }
     }
 
