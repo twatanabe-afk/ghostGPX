@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>GPS Tracker & GPX Ghost Player v2026.10.14.1335</title>
+  <title>GPS Tracker & GPX Ghost Player v2026.10.14.1415</title>
 
   <!-- PWA & Mobile Meta Tags -->
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -395,7 +395,7 @@
         <!-- Start Line -->
         <div class="flex items-center justify-between bg-slate-900/80 px-2 py-1.5 rounded-xl border border-amber-500/30">
           <div class="truncate mr-1 text-amber-300">
-            <span>🏁</span> <span id="startLineLabel">S: 始点</span>
+            <span>🏁</span> <span id="startLineLabel">S: 未設定</span>
           </div>
           <div class="flex gap-1 shrink-0">
             <button id="setStartBtn" class="px-1.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 border border-amber-500/40 transition">設定</button>
@@ -441,7 +441,7 @@
     <div id="mainControlPanel" class="pointer-events-auto w-full max-w-lg glass-panel rounded-2xl p-2.5 sm:p-3 shadow-2xl flex flex-col gap-1.5">
       
       <div class="flex items-center justify-between gap-2">
-        <!-- Auto Tracking Mode Toggle Button (Text only) -->
+        <!-- Auto Tracking Mode Toggle Button (Text only, no icon) -->
         <button id="trackTargetBtn" class="px-3 py-2 rounded-xl bg-sky-950/80 text-sky-400 font-bold text-xs border border-sky-500/50 flex items-center transition active:scale-95 shrink-0" title="追尾ターゲット切り替え">
           <span id="trackTargetLabel">追尾: 現在地</span>
         </button>
@@ -473,7 +473,7 @@
 
       <!-- Version Label in Bottom Right inside Control Panel -->
       <div class="flex justify-end pt-0.5">
-        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.14.1335</span>
+        <span class="font-mono text-[9px] text-slate-500/80 tracking-tight">v2026.10.14.1415</span>
       </div>
     </div>
   </footer>
@@ -484,7 +484,7 @@
   </div>
 
   <script>
-    const APP_VERSION = 'v2026.10.14.1335';
+    const APP_VERSION = 'v2026.10.14.1415';
 
     // Default Coordinates: Koriyama City, Fukushima
     const KORIYAMA_LAT = 37.398;
@@ -946,8 +946,8 @@
 
       map.fitBounds(ghostPolyline.getBounds(), { padding: [40, 40] });
 
-      // Default Checkpoints: Start = Point 0, Goal = Last Point
-      setStartLineCheckpoint(0);
+      // Checkpoints: Start = NOT set automatically, Goal = Final point automatically
+      unsetStartLineCheckpoint();
       setGoalLineCheckpoint(parsedPoints.length - 1);
 
       document.getElementById('ghostFileName').textContent = fileName;
@@ -998,7 +998,6 @@
       isWaitingForStart = false;
 
       document.getElementById('startLineLabel').textContent = `S: 未設定`;
-      showToast('🏁 スタート地点を解除しました');
     }
 
     function setGoalLineCheckpoint(pointIndex) {
@@ -1039,7 +1038,6 @@
       goalLineIndex = null;
 
       document.getElementById('goalLineLabel').textContent = `G: 未設定`;
-      showToast('🚩 ゴール地点を解除しました');
     }
 
     function getClosestPointIndexToCurrentTime() {
@@ -1092,6 +1090,7 @@
       }
     }
 
+    // Playing ghost preview manually NEVER triggers GPS tracking recording
     function toggleGhostPlayPause() {
       if (isRecording) {
         showToast('ℹ️ 記録(VSモード)中は現在地に連動して進行します');
@@ -1481,14 +1480,20 @@
         setStartLineCheckpoint(idx);
         showToast('🏁 現在のシーク位置をスタートラインに設定しました');
       });
-      document.getElementById('unsetStartBtn').addEventListener('click', unsetStartLineCheckpoint);
+      document.getElementById('unsetStartBtn').addEventListener('click', () => {
+        unsetStartLineCheckpoint();
+        showToast('🏁 スタート地点を解除しました');
+      });
 
       document.getElementById('setGoalBtn').addEventListener('click', () => {
         const idx = getClosestPointIndexToCurrentTime();
         setGoalLineCheckpoint(idx);
         showToast('🚩 現在のシーク位置をゴールラインに設定しました');
       });
-      document.getElementById('unsetGoalBtn').addEventListener('click', unsetGoalLineCheckpoint);
+      document.getElementById('unsetGoalBtn').addEventListener('click', () => {
+        unsetGoalLineCheckpoint();
+        showToast('🚩 ゴール地点を解除しました');
+      });
 
       document.getElementById('ghostSeekBar').addEventListener('input', (e) => {
         if (!ghostData) return;
